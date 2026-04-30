@@ -50,10 +50,14 @@ jobs:
       - name: Clean AppleDouble files from dist
         run: find apps/web/dist -name '._*' -delete && ls -la apps/web/dist/
 
+      - name: Install wrangler
+        run: npm install -g wrangler@3.114.17
+
       - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy apps/web/dist --project-name=yzinvest-ai --branch=${{ github.head_ref || github.ref_name }}
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          wrangler pages deploy apps/web/dist \
+            --project-name=yzinvest-ai \
+            --branch=${{ github.head_ref || github.ref_name }}
