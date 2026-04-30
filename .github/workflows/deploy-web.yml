@@ -47,7 +47,10 @@ jobs:
       - name: Build
         run: pnpm --filter @yzinvest/web build
         env:
-          VITE_API_BASE: https://yzinvest-ai-api.coollinn.workers.dev/api
+          VITE_API_BASE: /api
+
+      - name: Clean AppleDouble files from dist
+        run: find apps/web/dist -name '._*' -delete && ls -la apps/web/dist/
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
