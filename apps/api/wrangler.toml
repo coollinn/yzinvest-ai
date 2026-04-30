@@ -1,0 +1,28 @@
+name = "yzinvest-ai-api"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# 替换为实际值（首次 wrangler d1 create yzinvest 后获取）
+[[d1_databases]]
+binding = "DB"
+database_name = "yzinvest"
+database_id = "PLACEHOLDER_DATABASE_ID"
+migrations_dir = "drizzle/migrations"
+
+# 替换为实际值（首次 wrangler kv namespace create CACHE 后获取）
+[[kv_namespaces]]
+binding = "CACHE"
+id = "PLACEHOLDER_KV_NAMESPACE_ID"
+
+[vars]
+ENVIRONMENT = "production"
+CORS_ORIGINS = "https://yzinvest-ai.pages.dev,http://localhost:5173"
+
+[triggers]
+crons = ["30 8 * * *", "0 9 * * *"]
+
+# 通过 `wrangler secret put` 设置：
+# - TUSHARE_TOKEN
+# - JWT_SECRET (openssl rand -hex 32)
+# - CNINFO_COOKIE

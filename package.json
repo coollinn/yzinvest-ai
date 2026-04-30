@@ -1,0 +1,28 @@
+{
+  "name": "yzinvest-ai",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:api": "pnpm --filter @yzinvest/api dev",
+    "dev:web": "pnpm --filter @yzinvest/web dev",
+    "build": "pnpm -r build",
+    "build:api": "pnpm --filter @yzinvest/api build",
+    "build:web": "pnpm --filter @yzinvest/web build",
+    "deploy:api": "pnpm --filter @yzinvest/api deploy",
+    "deploy:web": "pnpm --filter @yzinvest/web deploy",
+    "db:generate": "pnpm --filter @yzinvest/api db:generate",
+    "db:migrate:local": "pnpm --filter @yzinvest/api db:migrate:local",
+    "db:migrate:remote": "pnpm --filter @yzinvest/api db:migrate:remote",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "packageManager": "pnpm@9.15.0"
+}

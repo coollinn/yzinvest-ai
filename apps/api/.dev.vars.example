@@ -1,0 +1,4 @@
+# 本地开发用的 secret（不要提交到 git）
+TUSHARE_TOKEN="your-tushare-token-here"
+JWT_SECRET="dev-secret-change-in-production-32bytes-hex"
+CNINFO_COOKIE="SF_cookie_4=...; insert_cookie=..."
