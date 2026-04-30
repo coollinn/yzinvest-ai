@@ -6,6 +6,11 @@ dist/
 .env.*
 !.env.example
 
+# Python (legacy)
+__pycache__/
+*.pyc
+*.pyo
+
 # IDE
 .vscode/
 .idea/
