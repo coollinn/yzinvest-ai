@@ -7,13 +7,13 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "yzinvest"
-database_id = "PLACEHOLDER_DATABASE_ID"
+database_id = "93b45a6b-4635-4138-b64e-11879d833b22"
 migrations_dir = "drizzle/migrations"
 
 # 替换为实际值（首次 wrangler kv namespace create CACHE 后获取）
 [[kv_namespaces]]
 binding = "CACHE"
-id = "PLACEHOLDER_KV_NAMESPACE_ID"
+id = "3d73c86e689e4edf877e77465ee050b1"
 
 [vars]
 ENVIRONMENT = "production"
