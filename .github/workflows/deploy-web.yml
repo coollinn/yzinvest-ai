@@ -47,7 +47,7 @@ jobs:
       - name: Build
         run: pnpm --filter @yzinvest/web build
         env:
-          VITE_API_BASE: https://yzinvest-ai-api.coollinn.workers.dev
+          VITE_API_BASE: https://yzinvest-ai-api.coollinn.workers.dev/api
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
