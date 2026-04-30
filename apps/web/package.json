@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc --noEmit && vite build",
+    "build": "vue-tsc --noEmit && vite build && pnpm postbuild",
+    "postbuild": "find dist -name '._*' -delete",
     "preview": "vite preview --port 5173",
     "deploy": "wrangler pages deploy dist --project-name yzinvest-ai",
     "typecheck": "vue-tsc --noEmit"
