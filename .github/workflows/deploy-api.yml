@@ -23,16 +23,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
 
-      - run: pnpm install
+      - name: Enable pnpm via corepack
+        run: corepack enable
 
-      - run: pnpm --version
+      - run: pnpm install
 
       - name: Typecheck
         run: pnpm --filter @yzinvest/api typecheck
