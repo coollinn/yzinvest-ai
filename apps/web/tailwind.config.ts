@@ -49,6 +49,16 @@ export default {
         up: "hsl(var(--up))",
         down: "hsl(var(--down))",
         warning: "hsl(var(--warning))",
+
+        // 侧边导航
+        sidebar: {
+          DEFAULT: "hsl(var(--sidebar-bg))",
+          foreground: "hsl(var(--sidebar-fg))",
+          "foreground-muted": "hsl(var(--sidebar-fg-muted))",
+          border: "hsl(var(--sidebar-border))",
+          accent: "hsl(var(--sidebar-accent))",
+          "accent-foreground": "hsl(var(--sidebar-accent-foreground))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

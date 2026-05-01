@@ -112,3 +112,66 @@ pnpm deploy:web
 ## Multi-Project Workspace
 
 This repo lives under `/Volumes/work/ai-dev-projects/`. Lark folder for project docs: `QH6vfK3xalxbNndxUuJc04Uinmg`. Repo legacy code in `legacy/` 仅供查阅。
+
+## CI/CD 避坑指南（核心经验）
+
+> 以下经验来自实际部署踩坑，后续开发必须注意。
+
+### 坑1：前端 API 路径不匹配
+
+- **现象**：前端调用 `/auth/login`，但 API Worker 路由为 `/api/auth/login` → 404
+- **根因**：`VITE_API_BASE` 未设置，前端直接拼接 `/auth/login`
+- **修复**：在 `deploy-web.yml` 构建步骤中设置 `VITE_API_BASE=/api`
+- **后续注意**：本地开发通过 `apps/web/.env.local` 覆盖；**永远不要在构建时使用绝对 URL 指向 workers.dev**
+
+### 坑2：浏览器无法访问 *.workers.dev
+
+- **现象**：前端登录报错 `Failed to fetch`，直接 curl workers.dev 超时
+- **根因**：国内/公司网络拦截 `*.workers.dev` 域名
+- **修复**：使用 `_worker.js` 在边缘代理所有 `/api/*` 请求，浏览器只访问 `*.pages.dev`
+- **后续注意**：API Worker 的 `workers.dev` 域名仅用于内部代理，**不要直接暴露给客户端**
+
+### 坑3：GitHub Actions Node 24 兼容性
+
+- **现象**：CI 报错 `--no-experimental-fetch is an invalid negation`
+- **根因**：`NODE_OPTIONS=--no-experimental-fetch` 和 `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true` 在 Node 22+ 已无效
+- **修复**：移除所有 Node 24 强制配置，工作流直接使用 Node 22
+- **后续注意**：monorepo + pnpm 项目建议固定 Node 20-22，不要混用版本标志
+
+### 坑4：wrangler-action 在 pnpm monorepo 中安装失败
+
+- **现象**：`cloudflare/wrangler-action@v3` 报错 `ERR_PNPM_ADDING_TO_ROOT`
+- **根因**：wrangler-action 内部 `npm install` 与 pnpm 工作区冲突
+- **修复**：移除 wrangler-action，改用 `npm install -g wrangler@3.114.17` 直接安装，然后调用 `wrangler` CLI
+- **后续注意**：在 monorepo + pnpm 项目中，**尽量避免使用需要注入依赖的 GitHub Action**，优先使用全局 CLI 工具
+
+### 坑5：Cloudflare Pages Functions 未被正确部署
+
+- **现象**：`apps/web/functions/` 目录的代码部署后不生效
+- **根因**：`wrangler pages deploy apps/web/dist` 只上传 `dist/` 目录内的文件，不会包含源代码目录中的 Functions
+- **修复**：切换为 `_worker.js` 方案，放入 `apps/web/public/` 目录，构建后自动进入 `dist/`，触发 Pages 高级模式
+- **后续注意**：`functions/` 目录在 `wrangler pages deploy` 中**不会被上传**；如需边缘逻辑，必须用 `_worker.js` 高级模式
+
+### 坑6：浏览器缓存旧 bundle 导致修复不生效
+
+- **现象**：修复 `VITE_API_BASE` 后，用户访问网站仍使用旧版本代码
+- **根因**：Cloudflare CDN + 浏览器 Service Worker 缓存了旧的 `index.html` 和 bundle JS 文件
+- **修复**：在 `_worker.js` 中为所有 `text/html` 响应添加 `Cache-Control: no-cache, no-store, must-revalidate` 和 `Pragma: no-cache` 头
+- **后续注意**：生产环境重要 Bug 修复后，**必须通知用户 Cmd+Shift+R 强刷或用无痕窗口**；也可考虑版本化文件名（Vite 默认已做 hash）
+
+### 坑7：AppleDouble 文件污染 dist 目录
+
+- **现象**：macOS 系统文件（如 `._optimizer.css`）被意外打包进 `dist`
+- **根因**：Vite 构建时保留了 macOS 生成的 AppleDouble 隐藏文件
+- **修复**：CI 中添加清理步骤：`find apps/web/dist -name '._*' -delete`
+- **后续注意**：在 `.gitignore` 中添加 `**/._*` 防止这些文件进入版本库
+
+### 关键配置速查
+
+| 文件 | 关键配置项 | 说明 |
+|------|------------|------|
+| `apps/web/.env.production` | `VITE_API_BASE=/api` | 前端 API 路径前缀（相对路径）|
+| `apps/web/public/_worker.js` | `API_WORKER` 常量 | 指向 API Worker 的 workers.dev 地址 |
+| `apps/api/wrangler.toml` | `CORS_ORIGINS` | 必须包含前端域名（pages.dev + localhost）|
+| `.github/workflows/deploy-web.yml` | `VITE_API_BASE` env | 构建时注入，与 wrangler.toml 的 CORS_ORIGINS 对应 |
+| `.github/workflows/deploy-api.yml` | `wrangler d1 migrations apply` | 每次部署自动应用 D1 migration |

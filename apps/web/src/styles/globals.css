@@ -30,6 +30,14 @@
     --warning: 24 95% 53%;
 
     --radius: 0.5rem;
+
+    /* 侧边导航专用 */
+    --sidebar-bg: 0 0% 99%;
+    --sidebar-border: 0 0% 88%;
+    --sidebar-fg: 0 0% 10%;
+    --sidebar-fg-muted: 0 0% 50%;
+    --sidebar-accent: 217 91% 60%;
+    --sidebar-accent-foreground: 0 0% 100%;
   }
 
   .dark {
@@ -54,6 +62,14 @@
     --up: 0 73% 55%;
     --down: 142 60% 50%;
     --warning: 24 95% 60%;
+
+    /* 侧边导航专用 */
+    --sidebar-bg: 0 0% 6%;
+    --sidebar-border: 0 0% 12%;
+    --sidebar-fg: 0 0% 92%;
+    --sidebar-fg-muted: 0 0% 55%;
+    --sidebar-accent: 217 91% 60%;
+    --sidebar-accent-foreground: 0 0% 100%;
   }
 
   * {
