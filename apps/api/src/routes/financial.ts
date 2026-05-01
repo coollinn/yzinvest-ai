@@ -53,11 +53,10 @@ app.get("/:ts_code/main-indicators", async (c) => {
     const keyMetrics = latest
       ? {
           basic_eps: latest.BASIC_EPS,
-          diluted_eps: latest.DILUTED_EPS,
+          diluted_eps: latest.BASIC_EPS,
           bps: latest.BPS, // 每股净资产
           roe_avg: latest.ROE_AVG, // 加权ROE
-          debt_to_assets: latest.DEBT_TO_ASSETS, // 资产负债率
-          pe_lyr: latest.PE_LYR,
+pe_lyr: latest.PE_TTM,
           pe_ttm: latest.PE_TTM,
           pb: latest.PB_LYR,
           yoygr: latest.YOYGR, // 营收增长率
@@ -107,9 +106,9 @@ app.get("/:ts_code/income-statement", async (c) => {
     // 组织为报告期 × 指标的二维结构
     const data: Record<string, Record<string, number | string | null>> = {};
     for (const r of reports) {
-      const date = r.REPORT_DATE;
+      const date: string = r.REPORT_DATE as string;
       data[date] ??= { report_date: date };
-      for (const [k, v] of Object.entries(r)) {
+      for (const [k, v] of Object.entries(r as Record<string, unknown>)) {
         if (k === "SECURITY_CODE" || k === "REPORT_DATE") continue;
         data[date][k] = v as number | string | null;
       }
@@ -153,9 +152,9 @@ app.get("/:ts_code/balance-sheet", async (c) => {
     const reports = await fetchFinancialReport(ts_code, "balance_sheet");
     const data: Record<string, Record<string, number | string | null>> = {};
     for (const r of reports) {
-      const date = r.REPORT_DATE;
+      const date: string = r.REPORT_DATE as string;
       data[date] ??= { report_date: date };
-      for (const [k, v] of Object.entries(r)) {
+      for (const [k, v] of Object.entries(r as Record<string, unknown>)) {
         if (k === "SECURITY_CODE" || k === "REPORT_DATE") continue;
         data[date][k] = v as number | string | null;
       }
@@ -199,9 +198,9 @@ app.get("/:ts_code/cash-flow", async (c) => {
     const reports = await fetchFinancialReport(ts_code, "cash_flow");
     const data: Record<string, Record<string, number | string | null>> = {};
     for (const r of reports) {
-      const date = r.REPORT_DATE;
+      const date: string = r.REPORT_DATE as string;
       data[date] ??= { report_date: date };
-      for (const [k, v] of Object.entries(r)) {
+      for (const [k, v] of Object.entries(r as Record<string, unknown>)) {
         if (k === "SECURITY_CODE" || k === "REPORT_DATE") continue;
         data[date][k] = v as number | string | null;
       }
@@ -252,11 +251,8 @@ app.get("/:ts_code/overview", async (c) => {
           pb: { value: indicator.PB_LYR, unit: "倍", report_date: indicator.REPORT_DATE },
           yoygr: { value: indicator.YOYGR, unit: "%", report_date: indicator.REPORT_DATE },
           yoyni: { value: indicator.YOYNI, unit: "%", report_date: indicator.REPORT_DATE },
-          debt_to_assets: { value: indicator.DEBT_TO_ASSETS, unit: "%", report_date: indicator.REPORT_DATE },
-          total_operate_income: { value: indicator.TOTAL_OPERATE_INCOME, unit: "元", report_date: indicator.REPORT_DATE },
-          net_profit: { value: indicator.NET_PROFIT, unit: "元", report_date: indicator.REPORT_DATE },
-          total_assets: { value: indicator.TOTAL_ASSETS, unit: "元", report_date: indicator.REPORT_DATE },
-          operate_cash_flow: { value: indicator.OPERATE_CASH_FLOW, unit: "元", report_date: indicator.REPORT_DATE },
+          debt_to_assets: { value: indicator.DEBTEQUITYR, unit: "%", report_date: indicator.REPORT_DATE },
+          net_profit: { value: indicator.NETPROFIT, unit: "万元", report_date: indicator.REPORT_DATE },
         }
       : null;
 

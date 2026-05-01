@@ -77,15 +77,15 @@ app.get("/:ts_code", async (c) => {
             .insert(stockDaily)
             .values({
               ts_code,
-              trade_date: row.trade_date.replace(/-/g, ""),
+              trade_date: row.date.replace(/-/g, ""),
               open: row.open,
               high: row.high,
               low: row.low,
               close: row.close,
-              pre_close: row.close - row.price_change,
-              change: row.price_change,
+              pre_close: row.close - (row.price_change ?? 0),
+              change: row.price_change ?? 0,
               pct_chg: row.pct_chg,
-              vol: row.vol,
+              vol: row.volume,
               amount: row.amount,
             })
             .onConflictDoUpdate({
@@ -95,10 +95,10 @@ app.get("/:ts_code", async (c) => {
                 high: row.high,
                 low: row.low,
                 close: row.close,
-                pre_close: row.close - row.price_change,
-                change: row.price_change,
+                pre_close: row.close - (row.price_change ?? 0),
+                change: row.price_change ?? 0,
                 pct_chg: row.pct_chg,
-                vol: row.vol,
+                vol: row.volume,
                 amount: row.amount,
               },
             });
@@ -168,15 +168,15 @@ app.get("/:ts_code/period/:period", async (c) => {
           .insert(stockDaily)
           .values({
             ts_code,
-            trade_date: row.trade_date.replace(/-/g, ""),
+            trade_date: row.date.replace(/-/g, ""),
             open: row.open,
             high: row.high,
             low: row.low,
             close: row.close,
-            pre_close: row.close - row.price_change,
-            change: row.price_change,
+            pre_close: row.close - (row.price_change ?? 0),
+            change: row.price_change ?? 0,
             pct_chg: row.pct_chg,
-            vol: row.vol,
+            vol: row.volume,
             amount: row.amount,
           })
           .onConflictDoUpdate({
@@ -186,10 +186,10 @@ app.get("/:ts_code/period/:period", async (c) => {
               high: row.high,
               low: row.low,
               close: row.close,
-              pre_close: row.close - row.price_change,
-              change: row.price_change,
+              pre_close: row.close - (row.price_change ?? 0),
+              change: row.price_change ?? 0,
               pct_chg: row.pct_chg,
-              vol: row.vol,
+              vol: row.volume,
               amount: row.amount,
             },
           });
