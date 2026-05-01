@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """
+最后更新：2026.05.01
 从东方财富API获取股票数据，生成 SQL 文件，可直接用 wrangler d1 execute 导入 D1 数据库
 用法：python3 sync_stocks_sql.py [page_size=100] [max_pages=3] [market=HS]
 """

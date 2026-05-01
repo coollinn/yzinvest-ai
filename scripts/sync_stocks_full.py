@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """
+最后更新：2026.05.01
 从东方财富API分页获取全量股票数据，生成SQL文件
 用法：python3 sync_stocks_full.py [market]
 market: HS=沪深A股(默认), KCB=科创板, CYB=创业板, SH=沪市, SZ=深市, BJ=北交所

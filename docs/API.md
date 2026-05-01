@@ -1,6 +1,7 @@
 # YZInvest AI — 后端 API 文档
 
-> 版本：2.0.0 | 更新日期：2026-05-01
+> 最后更新：2026.05.01
+> 版本：2.0.0
 > Base URL（生产）：`https://yzinvest-ai-api.coollinn.workers.dev`
 > Base URL（本地）：`http://localhost:8787`
 

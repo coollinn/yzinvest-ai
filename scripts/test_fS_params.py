@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""测试东方财富各板块参数的数据量"""
+"""最后更新：2026.05.01
+测试东方财富各板块参数的数据量"""
 import urllib.request, json, ssl
 
 ctx = ssl.create_default_context()

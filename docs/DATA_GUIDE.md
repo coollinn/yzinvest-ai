@@ -1,5 +1,6 @@
 # YZInvest AI — 数据策略与更新指南
 
+> 最后更新：2026.05.01
 > 本文档记录数据来源、API参数发现过程、分层更新策略，防止遗忘。
 
 ---
@@ -93,12 +94,16 @@ python3 scripts/test_fS_params.py
 
 **更新方法**：
 ```bash
-# 方法1：使用管理脚本
 cd /Users/leon.chen/work/ai-dev-projects/yzinvest-ai
-./scripts/manage.sh stock-sync
 
-# 方法2：直接运行获取脚本（全量 12386 条）
-python3 scripts/fetch_all_stocks.py /tmp/stocks_full.sql
+# 推荐：全自动一键同步（fetch + 本地 + 远程）
+./scripts/sync_all.sh
+
+# 断点续传（如上次中断）
+./scripts/sync_resume.sh
+
+# 或使用 manage.sh
+./scripts/manage.sh sync-all
 
 # 方法3：分模块获取（节省时间）
 python3 scripts/sync_stocks_sql.py 100 1 "m:0+t:6,m:0+t:13,m:1+t:2,m:1+t:23"  > /tmp/sh_main.sql
@@ -198,14 +203,16 @@ python3 scripts/sync_stocks_sql.py 100 1 "m:0+t:80,m:0+t:81,m:1+t:23,m:1+t:80" >
 
 | 文件 | 用途 |
 |:---|:---|
-| `scripts/fetch_all_stocks.py` | 全量股票数据获取（自动分页） |
-| `scripts/sync_stocks_sql.py` | 指定板块获取（单次请求） |
+| `scripts/sync_all.sh` | **全自动一键同步脚本**（推荐） |
+| `scripts/sync_resume.sh` | 断点续传脚本 |
+| `scripts/fetch_all_stocks.py` | 全量股票数据获取（自动分页，已内置 safe_float 修复） |
 | `scripts/test_fS_params.py` | 测试各板块 API 参数 |
 | `scripts/manage.sh` | 项目管理入口脚本 |
+| `docs/DATA_SYNC_MANUAL.md` | **数据同步操作手册**（含一键同步/断点续传/故障排查） |
 | `docs/API.md` | 后端 API 接口文档 |
 | `docs/DATA_GUIDE.md` | 本文档（数据策略与更新指南） |
 | `apps/api/src/services/eastmoney.ts` | 东财服务层代码 |
 
 ---
 
-*最后更新：2026-05-01*
+*最后更新：2026.05.01*

@@ -1,4 +1,5 @@
 #!/bin/bash
+# 最后更新：2026.05.01
 # ============================================================================
 # YZInvest AI — 项目管理脚本
 # 用法：
@@ -169,9 +170,13 @@ db_status() {
   npx wrangler d1 execute $DB_NAME --local --command "SELECT COUNT(*) as cnt FROM stocks;" 2>/dev/null | grep -E '"cnt"' || echo "  无法连接本地数据库"
   npx wrangler d1 execute $DB_NAME --local --command "SELECT COUNT(*) as cnt FROM stock_daily;" 2>/dev/null | grep -E '"cnt"' || echo "  无法连接本地数据库"
   echo ""
-  echo "【远程 D1】"
-  npx wrangler d1 execute $DB_NAME --remote --command "SELECT COUNT(*) as cnt FROM stocks;" 2>/dev/null | grep -E '"cnt"' || echo "  无法连接远程数据库"
-  npx wrangler d1 execute $DB_NAME --remote --command "SELECT COUNT(*) as cnt FROM stock_daily;" 2>/dev/null | grep -E '"cnt"' || echo "  无法连接远程数据库"
+  echo "【远程 D1】（需要代理）"
+  if require_proxy > /dev/null 2>&1; then
+    npx wrangler d1 execute $DB_NAME --remote --command "SELECT COUNT(*) as cnt FROM stocks;" 2>/dev/null | grep -E '"cnt"' || echo "  无法连接远程数据库"
+    npx wrangler d1 execute $DB_NAME --remote --command "SELECT COUNT(*) as cnt FROM stock_daily;" 2>/dev/null | grep -E '"cnt"' || echo "  无法连接远程数据库"
+  else
+    warn "代理未开启，跳过远程数据库查询"
+  fi
 }
 
 db_reset_local() {
@@ -360,7 +365,18 @@ print(f'分{(len(sqls)-1)//100+1}批')
   log "本地导入: $success 成功, $fail 失败"
 }
 
+require_proxy() {
+  if ! curl -s --max-time 3 --noproxy "*" "https://api.cloudflare.com/" -o /dev/null 2>&1; then
+    error "访问 Cloudflare API 失败，请先开启代理！"
+    log "提示：导入远程数据库（--remote）需要代理访问 workers.dev"
+    log "代理开启后重新运行即可"
+    return 1
+  fi
+  return 0
+}
+
 _import_to_remote() {
+  require_proxy || return 1
   local sql_file="$1"
   cd "$API_DIR"
   # 清空远程旧数据
@@ -400,7 +416,16 @@ stock-sync() {
   info "同步股票基础数据 (Layer 1)..."
   log "来源: 东方财富全量行情 API (~12386 条)"
   log "频率: 每季度手动更新，或发现新股/退市时触发"
-  log "详细说明: docs/DATA_GUIDE.md"
+  log ""
+  log "推荐命令（自动化脚本，无需人工干预）："
+  log "  ./sync_all.sh        # 一键全量同步（本地+远程，推荐）"
+  log "  ./sync_all.sh --local-only   # 仅同步本地"
+  log "  ./sync_all.sh --skip-local   # 仅同步远程（需要代理）"
+  log ""
+  log "断点续传（如上次中断）："
+  log "  ./sync_resume.sh     # 智能续传"
+  log ""
+  log "详细说明: docs/DATA_SYNC_MANUAL.md"
 
   SQL_FILE="/tmp/stocks_layer1_$(date +%Y%m%d).sql"
   log "获取数据 -> $SQL_FILE..."
@@ -499,6 +524,16 @@ case "$CMD" in
   test-auth)
     test-auth
     ;;
+  sync-all)
+    "$SCRIPTS_DIR/sync_all.sh" "$@"
+    ;;
+  sync-incremental)
+    shift
+    "$SCRIPTS_DIR/sync_incremental.sh" "$@"
+    ;;
+  sync-resume)
+    "$SCRIPTS_DIR/sync_resume.sh"
+    ;;
   sync-local)
     sync_local
     ;;
@@ -544,8 +579,11 @@ case "$CMD" in
     echo "  db-query SQL  执行本地 SQL 查询"
     echo ""
     echo "数据同步:"
-    echo "  sync-local    获取数据并同步到本地数据库"
-    echo "  sync-remote   获取数据并同步到远程数据库"
+    echo "  sync-all         全自动同步（fetch + 本地 + 远程，推荐）"
+    echo "  sync-incremental 增量同步（仅同步变化部分，推荐日常使用）"
+    echo "  sync-resume      断点续传（上次中断后补漏）"
+    echo "  sync-local       获取数据并同步到本地数据库"
+    echo "  sync-remote      获取数据并同步到远程数据库"
     echo ""
     echo "部署:"
     echo "  deploy        触发 CI/CD 部署到远程"
