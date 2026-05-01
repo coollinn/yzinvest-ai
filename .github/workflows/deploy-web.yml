@@ -48,7 +48,9 @@ jobs:
           VITE_API_BASE: /api
 
       - name: Clean AppleDouble files from dist
-        run: find apps/web/dist -name '._*' -delete && ls -la apps/web/dist/
+        run: |
+          find apps/web/dist -name '._*' -delete
+          ls -la apps/web/dist/
 
       - name: Install wrangler
         run: npm install -g wrangler@3.114.17
