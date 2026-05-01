@@ -23,6 +23,4 @@ CORS_ORIGINS = "https://yzinvest-ai.pages.dev,http://localhost:5173"
 crons = ["30 8 * * *", "0 9 * * *"]
 
 # 通过 `wrangler secret put` 设置：
-# - TUSHARE_TOKEN
 # - JWT_SECRET (openssl rand -hex 32)
-# - CNINFO_COOKIE

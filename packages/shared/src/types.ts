@@ -23,6 +23,12 @@ export interface Stock {
   exchange: string | null;
   list_status: string | null;
   list_date: string | null;
+  // 行情衍生字段（API 可能返回）
+  market_cap?: number | null;
+  pe_ttm?: number | null;
+  pb?: number | null;
+  ps_ttm?: number | null;
+  roe?: number | null;
 }
 
 export interface StockDaily {
@@ -78,6 +84,7 @@ export interface AnalysisData {
   price_change: number | null;
   pct_chg: number | null;
   volume: number | null;
+  amount: number | null;
   high: number | null;
   low: number | null;
   open: number | null;
