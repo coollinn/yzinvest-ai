@@ -2,6 +2,7 @@
  * Cloudflare Pages Advanced Mode Worker (_worker.js)
  * - /api/* → 代理到 API Worker
  * - 其他路径 → 返回静态资源（SPA fallback 到 index.html）
+ *   index.html 强制 no-cache，防止旧版本被浏览器/CDN 缓存
  */
 
 const API_WORKER = "https://yzinvest-ai-api.coollinn.workers.dev";
@@ -43,12 +44,23 @@ export default {
     }
 
     // 非 API 请求交给 Pages 静态资源处理
-    // env.ASSETS 是 Cloudflare Pages 注入的静态资源服务
-    const response = await env.ASSETS.fetch(request);
+    let response = await env.ASSETS.fetch(request);
 
-    // 404 → SPA fallback
+    // 404 → SPA fallback 到 index.html
     if (response.status === 404) {
-      return env.ASSETS.fetch(new Request(new URL("/index.html", request.url), request));
+      response = await env.ASSETS.fetch(new Request(new URL("/index.html", request.url), request));
+    }
+
+    // index.html 强制 no-cache（防止旧 bundle hash 对应的旧内容被缓存）
+    const isHtml = response.headers.get("content-type")?.includes("text/html");
+    if (isHtml) {
+      const newHeaders = new Headers(response.headers);
+      newHeaders.set("Cache-Control", "no-cache, no-store, must-revalidate");
+      newHeaders.set("Pragma", "no-cache");
+      return new Response(response.body, {
+        status: response.status,
+        headers: newHeaders,
+      });
     }
 
     return response;
