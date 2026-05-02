@@ -99,8 +99,6 @@ const ok = await bcrypt.compare(plaintext, user.password_hash);
 │  Cloudflare Workers Secrets       │   Worker runtime 用
 │  ────────────────────────────    │
 │  JWT_SECRET                      │   签 JWT 用，32 bytes hex
-│  TUSHARE_TOKEN                   │   Tushare API（已弃用，保留）
-│  CNINFO_COOKIE                   │   抓 cninfo 财报用
 └──────────────────────────────────┘
 
 ┌──────────────────────────────────┐
@@ -116,9 +114,6 @@ const ok = await bcrypt.compare(plaintext, user.password_hash);
 cd apps/api
 pnpm exec wrangler secret put JWT_SECRET
 # 粘贴 32 字节 hex（用 openssl rand -hex 32 生成）
-
-pnpm exec wrangler secret put CNINFO_COOKIE
-# 粘贴浏览器 DevTools 抓的 Cookie
 
 # 列出
 pnpm exec wrangler secret list

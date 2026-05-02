@@ -33,7 +33,7 @@
 │   ├─ /auth          register / login / refresh / me / logout (JWT)       │
 │   ├─ /stocks        list / search / random / quotes / indices / detail   │
 │   ├─ /daily         按 range / period 取 K 线（fallback 拉取东财）      │
-│   ├─ /financial     四张主报表 + overview（cninfo / 财报缓存）          │
+│   ├─ /financial     四张主报表 + overview（东方财富 datacenter）       │
 │   ├─ /favorites     用户收藏（拖拽排序）                                  │
 │   ├─ /notes         投研笔记                                              │
 │   ├─ /valuation     DCF / CAPM 估值                                       │
@@ -96,7 +96,7 @@
   - K 线 tab 请求 /api/daily/000001.SZ?range=3M
        → 后端先查 D1，本地数据不足时调 push2his.eastmoney.com 拉取并落库
   - 财报 tab 请求 /api/financial/000001.SZ/balance-sheet
-       → KV 缓存命中直接返回；miss 时调 cninfo（24h 后过期）
+       → KV 缓存命中直接返回；miss 时调东方财富 datacenter（24h 后过期）
 ```
 
 ---
@@ -156,7 +156,7 @@
 
 | 数据 | 来源 | 缓存 | 位置 |
 |------|------|------|------|
-| 财务报表 | cninfo / 东财 datacenter | KV 24h | `apps/api/src/services/cninfo.ts` |
+| 财务报表 | 东方财富 datacenter | KV 24h | `apps/api/src/services/eastmoney.ts` |
 | DCF 估值结果 | 用户输入 + 公式 | KV 6h（按参数 hash） | `apps/api/src/routes/valuation.ts` |
 
 ### 4.3 用户数据（写到 D1）

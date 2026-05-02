@@ -13,6 +13,7 @@ import {
   Target,
   Zap,
   AlertCircle,
+  FileText,
 } from "lucide-vue-next";
 import { computed, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -38,13 +39,20 @@ import KLineChart from "@/components/stock/KLineChart.vue";
 import FinancialPanel from "@/components/stock/FinancialPanel.vue";
 import ValuationPanel from "@/components/stock/ValuationPanel.vue";
 import NotesPanel from "@/components/stock/NotesPanel.vue";
+import ReportsPanel from "@/components/stock/ReportsPanel.vue";
+import PredictionPanel from "@/components/stock/PredictionPanel.vue";
+import {
+  addLocalFavorite,
+  isLocalFavorite,
+  removeLocalFavorite,
+} from "@/composables/useLocalStorage";
 
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
 
 const tsCode = computed(() => route.params.tsCode as string);
-const activeTab = ref<"chart" | "financial" | "valuation" | "notes">("chart");
+const activeTab = ref<"chart" | "financial" | "reports" | "prediction" | "valuation" | "notes">("chart");
 
 const { data, isLoading, refetch } = useQuery({
   queryKey: ["stock-detail", tsCode],
@@ -58,11 +66,18 @@ const { data: favCheck, refetch: refetchFav } = useQuery({
   enabled: () => auth.isAuthenticated,
 });
 
-const isFavorite = computed(() => !!favCheck.value?.is_favorite);
+const isFavorite = computed(() => {
+  if (!auth.isAuthenticated) return isLocalFavorite(tsCode.value);
+  return !!favCheck.value?.is_favorite;
+});
 
 async function toggleFavorite() {
   if (!auth.isAuthenticated) {
-    router.push({ name: "login", query: { redirect: route.fullPath } });
+    if (isLocalFavorite(tsCode.value)) {
+      removeLocalFavorite(tsCode.value);
+    } else {
+      addLocalFavorite(tsCode.value);
+    }
     return;
   }
   if (isFavorite.value) {
@@ -213,15 +228,6 @@ const isUp = computed(() => (data.value?.analysis_data.pct_chg ?? 0) >= 0);
                     {{ data.has_real_data ? '行情已就绪' : '行情缺失' }}
                   </span>
                 </div>
-                <div class="flex items-center gap-1">
-                  <div
-                    class="h-2 w-2 rounded-full"
-                    :class="data.has_financial_data ? 'bg-accent' : 'bg-warning'"
-                  />
-                  <span class="text-xs text-muted-foreground">
-                    {{ data.has_financial_data ? '财报已加载' : '待加载财报' }}
-                  </span>
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -269,6 +275,8 @@ const isUp = computed(() => (data.value?.analysis_data.pct_chg ?? 0) >= 0);
             v-for="t in [
               { key: 'chart', label: 'K 线' },
               { key: 'financial', label: '财务分析' },
+              { key: 'reports', label: '财务报表' },
+              { key: 'prediction', label: 'AI 预测' },
               { key: 'valuation', label: '估值模型' },
               { key: 'notes', label: '投资笔记' },
             ]"
@@ -285,6 +293,8 @@ const isUp = computed(() => (data.value?.analysis_data.pct_chg ?? 0) >= 0);
               :is="{
                 chart: BarChart2,
                 financial: Activity,
+                reports: FileText,
+                prediction: Zap,
                 valuation: Target,
                 notes: AlertCircle,
               }[t.key]"
@@ -298,6 +308,8 @@ const isUp = computed(() => (data.value?.analysis_data.pct_chg ?? 0) >= 0);
         <div class="flex-1 overflow-auto p-5">
           <KLineChart v-if="activeTab === 'chart'" :ts-code="tsCode" />
           <FinancialPanel v-else-if="activeTab === 'financial'" :ts-code="tsCode" />
+          <ReportsPanel v-else-if="activeTab === 'reports'" :ts-code="tsCode" />
+          <PredictionPanel v-else-if="activeTab === 'prediction'" :ts-code="tsCode" />
           <ValuationPanel v-else-if="activeTab === 'valuation'" :ts-code="tsCode" />
           <NotesPanel v-else-if="activeTab === 'notes'" :ts-code="tsCode" />
         </div>

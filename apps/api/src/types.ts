@@ -3,9 +3,7 @@ export interface Env {
   CACHE: KVNamespace;
   ENVIRONMENT: string;
   CORS_ORIGINS: string;
-  TUSHARE_TOKEN: string;
   JWT_SECRET: string;
-  CNINFO_COOKIE: string;
 }
 
 export interface AuthUser {

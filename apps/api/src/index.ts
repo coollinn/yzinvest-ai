@@ -10,6 +10,7 @@ import daily from "./routes/daily";
 import favorites from "./routes/favorites";
 import financial from "./routes/financial";
 import notes from "./routes/notes";
+import prediction from "./routes/prediction";
 import stocks from "./routes/stocks";
 import valuation from "./routes/valuation";
 import type { Env, Variables } from "./types";
@@ -70,6 +71,7 @@ app.route("/api/financial", financial);
 app.route("/api/notes", notes);
 app.route("/api/favorites", favorites);
 app.route("/api/valuation", valuation);
+app.route("/api/prediction", prediction);
 app.route("/api/admin", admin);
 
 export default {

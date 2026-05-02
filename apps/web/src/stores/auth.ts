@@ -58,6 +58,10 @@ export const useAuthStore = defineStore(
       return resp;
     }
 
+    function setUser(u: User) {
+      user.value = u;
+    }
+
     async function logout() {
       try {
         if (accessToken.value) await apiPost("/auth/logout");
@@ -80,6 +84,7 @@ export const useAuthStore = defineStore(
       register,
       login,
       logout,
+      setUser,
     };
   },
   {

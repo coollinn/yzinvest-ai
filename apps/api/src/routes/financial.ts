@@ -1,14 +1,18 @@
 import type { FinancialType } from "@yzinvest/shared";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { Hono, type Context } from "hono";
 import { createDb } from "../db/client";
-import { financialData, stocks } from "../db/schema";
+import { financialReports, stocks } from "../db/schema";
 import { ApiError, ok } from "../lib/responses";
 import {
   fetchFinancialIndicator,
   fetchFinancialReport,
   fetchLatestIndicator,
 } from "../services/eastmoney";
+import {
+  fetchCninfoOrgId,
+  fetchCninfoReports,
+} from "../services/cninfo-reports";
 import type { Env, Variables } from "../types";
 
 type AppContext = Context<{ Bindings: Env; Variables: Variables }>;
@@ -53,15 +57,20 @@ app.get("/:ts_code/main-indicators", async (c) => {
     const keyMetrics = latest
       ? {
           basic_eps: latest.BASIC_EPS,
-          diluted_eps: latest.BASIC_EPS,
+          deduct_basic_eps: latest.DEDUCT_BASIC_EPS,
           bps: latest.BPS, // 每股净资产
-          roe_avg: latest.ROE_AVG, // 加权ROE
-pe_lyr: latest.PE_TTM,
-          pe_ttm: latest.PE_TTM,
-          pb: latest.PB_LYR,
-          yoygr: latest.YOYGR, // 营收增长率
-          yoyni: latest.YOYNI, // 净利润增长率
+          roe_avg: latest.WEIGHTAVG_ROE, // 加权ROE
+          total_operate_income: latest.TOTAL_OPERATE_INCOME, // 营业总收入
+          parent_netprofit: latest.PARENT_NETPROFIT, // 归母净利润
+          yoy_revenue: latest.YSTZ, // 营收同比增长
+          yoy_profit: latest.SJLTZ, // 净利同比增长
+          mom_revenue: latest.YSHZ, // 营收环比增长
+          mom_profit: latest.SJLHZ, // 净利环比增长
+          gross_margin: latest.XSMLL, // 毛利率
+          mgjyxjje: latest.MGJYXJJE, // 每股经营现金流
+          zxgxl: latest.ZXGXL, // 最新股息率
           report_date: latest.REPORT_DATE,
+          datatype: latest.DATATYPE,
         }
       : null;
 
@@ -245,14 +254,17 @@ app.get("/:ts_code/overview", async (c) => {
     const key_metrics = indicator
       ? {
           basic_eps: { value: indicator.BASIC_EPS, unit: "元/股", report_date: indicator.REPORT_DATE },
+          deduct_basic_eps: { value: indicator.DEDUCT_BASIC_EPS, unit: "元/股", report_date: indicator.REPORT_DATE },
           bps: { value: indicator.BPS, unit: "元/股", report_date: indicator.REPORT_DATE },
-          roe_avg: { value: indicator.ROE_AVG, unit: "%", report_date: indicator.REPORT_DATE },
-          pe_ttm: { value: indicator.PE_TTM, unit: "倍", report_date: indicator.REPORT_DATE },
-          pb: { value: indicator.PB_LYR, unit: "倍", report_date: indicator.REPORT_DATE },
-          yoygr: { value: indicator.YOYGR, unit: "%", report_date: indicator.REPORT_DATE },
-          yoyni: { value: indicator.YOYNI, unit: "%", report_date: indicator.REPORT_DATE },
-          debt_to_assets: { value: indicator.DEBTEQUITYR, unit: "%", report_date: indicator.REPORT_DATE },
-          net_profit: { value: indicator.NETPROFIT, unit: "万元", report_date: indicator.REPORT_DATE },
+          roe_avg: { value: indicator.WEIGHTAVG_ROE, unit: "%", report_date: indicator.REPORT_DATE },
+          total_operate_income: { value: indicator.TOTAL_OPERATE_INCOME, unit: "元", report_date: indicator.REPORT_DATE },
+          parent_netprofit: { value: indicator.PARENT_NETPROFIT, unit: "元", report_date: indicator.REPORT_DATE },
+          yoy_revenue: { value: indicator.YSTZ, unit: "%", report_date: indicator.REPORT_DATE },
+          yoy_profit: { value: indicator.SJLTZ, unit: "%", report_date: indicator.REPORT_DATE },
+          gross_margin: { value: indicator.XSMLL, unit: "%", report_date: indicator.REPORT_DATE },
+          mgjyxjje: { value: indicator.MGJYXJJE, unit: "元/股", report_date: indicator.REPORT_DATE },
+          zxgxl: { value: indicator.ZXGXL, unit: "%", report_date: indicator.REPORT_DATE },
+          report_date: indicator.REPORT_DATE,
         }
       : null;
 
@@ -289,6 +301,72 @@ app.post("/:ts_code/sync", async (c) => {
   ]);
 
   return c.json(ok({ ts_code, message: "Cache cleared, next request will fetch fresh data" }));
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/financial/:ts_code/reports — 财务报表 PDF 列表
+// ---------------------------------------------------------------------------
+app.get("/:ts_code/reports", async (c) => {
+  const ts_code = c.req.param("ts_code");
+  const db = createDb(c.env.DB);
+  const stock = await ensureStock(db, ts_code);
+
+  const items = await db
+    .select()
+    .from(financialReports)
+    .where(eq(financialReports.ts_code, ts_code))
+    .orderBy(desc(financialReports.announcement_date));
+
+  return c.json(
+    ok({
+      stock: { ts_code: stock.ts_code, symbol: stock.symbol, name: stock.name },
+      items,
+      count: items.length,
+      has_synced: items.length > 0,
+    })
+  );
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/financial/:ts_code/reports/sync — 从 cninfo 同步报表元数据
+// ---------------------------------------------------------------------------
+app.post("/:ts_code/reports/sync", async (c) => {
+  const ts_code = c.req.param("ts_code");
+  const db = createDb(c.env.DB);
+  const stock = await ensureStock(db, ts_code);
+
+  const orgId = await fetchCninfoOrgId(stock.symbol);
+  if (!orgId) throw new ApiError(404, "Cannot find orgId for this stock on cninfo");
+
+  const reports = await fetchCninfoReports(stock.symbol, orgId, 100);
+  let inserted = 0;
+
+  for (const r of reports) {
+    try {
+      await db.insert(financialReports).values({
+        ts_code,
+        announcement_id: r.announcementId,
+        title: r.title,
+        report_type: r.reportType,
+        report_period: r.reportPeriod,
+        announcement_date: r.announcementTime,
+        pdf_url: r.pdfUrl,
+        file_size: r.fileSize,
+      }).onConflictDoNothing({ target: financialReports.announcement_id });
+      inserted++;
+    } catch {
+      // ignore duplicate
+    }
+  }
+
+  return c.json(
+    ok({
+      ts_code,
+      stock: { ts_code: stock.ts_code, symbol: stock.symbol, name: stock.name },
+      fetched: reports.length,
+      inserted,
+    })
+  );
 });
 
 export default app;

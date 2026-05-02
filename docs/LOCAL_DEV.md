@@ -107,15 +107,13 @@ pnpm db:migrate:local
 
 ## 5. 本地 secret 配置（可选）
 
-如果你要在本地调用 Tushare / 东方财富 / cninfo 等需要 secret 的接口：
+如果你要在本地调用需要 secret 的接口：
 
 ```bash
 cd apps/api
 cp .dev.vars.example .dev.vars
 # 编辑 .dev.vars，填入：
-#   TUSHARE_TOKEN=...
 #   JWT_SECRET=any-32-byte-hex      # openssl rand -hex 32
-#   CNINFO_COOKIE=...
 ```
 
 `.dev.vars` 已在 `.gitignore`，不会被 commit。

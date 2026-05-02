@@ -265,7 +265,6 @@ pnpm --filter @yzinvest/api exec wrangler d1 export yzinvest --remote --output b
 ```bash
 # 立刻轮换 secret
 pnpm --filter @yzinvest/api exec wrangler secret put JWT_SECRET
-pnpm --filter @yzinvest/api exec wrangler secret put TUSHARE_TOKEN
 
 # 已签发的 access_token 在 15 分钟内失效（refresh_token 7 天）
 # 紧急要清掉所有人的 session：换 JWT_SECRET 即可，所有 token 立刻 invalid

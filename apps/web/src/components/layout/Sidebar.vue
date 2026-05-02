@@ -3,6 +3,7 @@ import {
   BarChart3,
   BookOpen,
   LayoutDashboard,
+  LogIn,
   LogOut,
   Moon,
   Settings,
@@ -40,10 +41,12 @@ const mainNav: NavItem[] = [
   { icon: BookOpen, label: "笔记", to: "/notes" },
 ];
 
-const bottomNav: NavItem[] = [
-  { icon: Settings, label: "设置", to: "/settings" },
+const bottomNav = computed((): NavItem[] => [
+  ...(auth.isAuthenticated
+    ? [{ icon: Settings, label: "设置", to: "/settings" }]
+    : [{ icon: LogIn, label: "登录", to: "/login" }]),
   { icon: Shield, label: "管理", to: "/admin", adminOnly: true },
-];
+]);
 
 function isActive(to: string) {
   if (to === "/") return route.path === "/";
@@ -140,17 +143,25 @@ async function handleLogout() {
             {{ auth.user?.full_name || auth.user?.username || '未登录' }}
           </p>
           <p class="truncate text-[10px] text-sidebar-foreground/50">
-            {{ auth.isAdmin ? '管理员' : '用户' }}
+            {{ auth.isAdmin ? '管理员' : auth.isAuthenticated ? '用户' : '访客模式' }}
           </p>
         </div>
         <button
-          v-if="!collapsed"
+          v-if="!collapsed && auth.isAuthenticated"
           class="ml-auto shrink-0 rounded p-1 text-sidebar-foreground/50 transition-colors hover:bg-sidebar-accent/10 hover:text-sidebar-foreground"
           title="退出登录"
           @click="handleLogout"
         >
           <LogOut class="h-3 w-3" />
         </button>
+        <RouterLink
+          v-if="!collapsed && !auth.isAuthenticated"
+          to="/login"
+          class="ml-auto shrink-0 rounded p-1 text-sidebar-foreground/50 transition-colors hover:bg-sidebar-accent/10 hover:text-sidebar-foreground"
+          title="登录"
+        >
+          <LogIn class="h-3 w-3" />
+        </RouterLink>
       </div>
 
       <!-- Theme toggle -->

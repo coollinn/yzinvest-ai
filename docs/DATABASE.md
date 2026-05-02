@@ -119,44 +119,11 @@ stock_daily {
 > - `amount` 单位是**元**（不是千元；从东财 f20 取，已是元）
 > - `pct_chg` 是**百分点数值**：1.28 表示涨 1.28%
 
-### 2.4 `financial_data`
+### 2.4 `financial_data`（已移除）
 
-财务数据**长表**结构，因为 cninfo / 东财 字段动态：
-
-```ts
-financial_data {
-  id:             integer PK
-  ts_code:        text not null
-  report_type:    enum('year'|'middle'|'one'|'three')   // 年报/半年报/一季报/三季报
-  report_date:    text not null                          // YYYY-MM-DD
-  financial_type: enum('balance_sheet'|'income_statement'|'cash_flow'|'main_indicators')
-  data_key:       text not null                          // "货币资金" / "营业总收入" 等
-  data_value:     real
-  data_unit:      text                                   // "万元" / "%"
-  created_at:     text
-  updated_at:     text
-}
-
-索引:
-  uq_fin (ts_code, financial_type, report_type, report_date, data_key) UNIQUE
-  idx_fin_code (ts_code)
-```
-
-读取时通过 SQL 透视回宽表。前端拿到的格式：
-
-```ts
-{
-  data: {
-    year: {
-      "2024-12-31": { "货币资金": { value: 160026.91, unit: "万元" } },
-      "2023-12-31": { ... }
-    },
-    middle: { ... },
-    one: { ... },
-    three: { ... }
-  }
-}
-```
+> 财务数据原存储在 D1 `financial_data` 长表中，2026-05-02 迁移后改为**纯 KV 缓存**模式。
+>
+> 财报数据直接从东方财富 datacenter API 拉取，按股票代码缓存到 KV（TTL 24h），不再持久化到数据库。
 
 ### 2.5 `notes`
 

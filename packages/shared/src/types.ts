@@ -95,7 +95,6 @@ export interface StockDetailResponse {
   stock: Stock;
   analysis_data: AnalysisData;
   has_real_data: boolean;
-  has_financial_data: boolean;
 }
 
 // ───── financial ─────

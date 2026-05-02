@@ -15,13 +15,11 @@ const router = createRouter({
       path: "/favorites",
       name: "favorites",
       component: () => import("@/pages/Favorites.vue"),
-      meta: { requiresAuth: true },
     },
     {
       path: "/notes",
       name: "notes",
       component: () => import("@/pages/Notes.vue"),
-      meta: { requiresAuth: true },
     },
     {
       path: "/settings",

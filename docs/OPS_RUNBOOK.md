@@ -161,8 +161,8 @@ pnpm --filter @yzinvest/api exec wrangler secret put JWT_SECRET
 | Secret | 用途 | 轮换影响 |
 |--------|------|----------|
 | `JWT_SECRET` | JWT 签名 | 所有用户 token 立刻失效，需重新登录 |
-| `TUSHARE_TOKEN` | 旧数据源 | 已弃用，但保留兜底 |
-| `CNINFO_COOKIE` | 旧财报源 | 已弃用 |
+| `TUSHARE_TOKEN` | ~~旧数据源~~ | 已删除 |
+| `CNINFO_COOKIE` | ~~旧财报源~~ | 已删除 |
 | `CLOUDFLARE_API_TOKEN`（GitHub Secret）| CI 部署 | CI 失败，需重新生成 + 更新 GitHub |
 
 ### 4.3 GitHub Actions Secrets

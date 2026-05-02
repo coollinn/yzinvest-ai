@@ -73,34 +73,6 @@ export const stockDaily = sqliteTable(
   })
 );
 
-export const financialData = sqliteTable(
-  "financial_data",
-  {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-    ts_code: text("ts_code").notNull(),
-    report_type: text("report_type", { enum: ["year", "middle", "one", "three"] }).notNull(),
-    report_date: text("report_date").notNull(),
-    financial_type: text("financial_type", {
-      enum: ["balance_sheet", "income_statement", "cash_flow", "main_indicators"],
-    }).notNull(),
-    data_key: text("data_key").notNull(),
-    data_value: real("data_value"),
-    data_unit: text("data_unit"),
-    created_at: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updated_at: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-  },
-  (table) => ({
-    uniq: uniqueIndex("uq_fin").on(
-      table.ts_code,
-      table.financial_type,
-      table.report_type,
-      table.report_date,
-      table.data_key
-    ),
-    codeIdx: index("idx_fin_code").on(table.ts_code),
-  })
-);
-
 export const notes = sqliteTable(
   "notes",
   {
@@ -156,9 +128,50 @@ export const valuationCache = sqliteTable(
   })
 );
 
+export const predictions = sqliteTable(
+  "predictions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    ts_code: text("ts_code").notNull(),
+    model_version: text("model_version").notNull().default("v1"),
+    horizon_days: integer("horizon_days").notNull().default(5),
+    predict_dates: text("predict_dates", { mode: "json" }).$type<string[]>().notNull(),
+    predict_prices: text("predict_prices", { mode: "json" }).$type<number[]>().notNull(),
+    confidence: real("confidence"),
+    signal: text("signal", { enum: ["bull", "bear", "neutral"] }).notNull().default("neutral"),
+    metrics: text("metrics", { mode: "json" }).$type<Record<string, unknown>>(),
+    created_at: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    tsIdx: index("idx_pred_ts").on(table.ts_code),
+    createdIdx: index("idx_pred_created").on(table.created_at),
+  })
+);
+
+export const financialReports = sqliteTable(
+  "financial_reports",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    ts_code: text("ts_code").notNull(),
+    announcement_id: text("announcement_id").notNull().unique(),
+    title: text("title").notNull(),
+    report_type: text("report_type"), // 年报 / 半年报 / 一季报 / 三季报 / 摘要
+    report_period: text("report_period"), // 2025Q4 / 2025Q2 / 2026Q1
+    announcement_date: text("announcement_date"),
+    pdf_url: text("pdf_url").notNull(),
+    file_size: integer("file_size"),
+    created_at: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    tsIdx: index("idx_reports_ts").on(table.ts_code),
+    periodIdx: index("idx_reports_period").on(table.report_period),
+  })
+);
+
 export type DbUser = typeof users.$inferSelect;
 export type DbStock = typeof stocks.$inferSelect;
 export type DbStockDaily = typeof stockDaily.$inferSelect;
-export type DbFinancialData = typeof financialData.$inferSelect;
 export type DbNote = typeof notes.$inferSelect;
 export type DbFavorite = typeof favorites.$inferSelect;
+export type DbPrediction = typeof predictions.$inferSelect;
+export type DbFinancialReport = typeof financialReports.$inferSelect;

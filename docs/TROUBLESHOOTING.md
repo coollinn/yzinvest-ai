@@ -176,24 +176,23 @@ curl -i https://yzinvest-ai.pages.dev/api/auth/me \
 
 ---
 
-### 2.3 财报永远 503 / 缓存 miss 后失败
+### 2.3 财报 503 / 缓存 miss 后失败
 
-**现象**：股票详情→财报 tab 永远报错。
+**现象**：股票详情→财报 tab 报错。
 
-**根因**：`CNINFO_COOKIE` 失效（cninfo 服务端 session 过期，约 1-2 周）。
+**根因**：东方财富 datacenter API 请求失败（网络问题或对方服务异常）。
 
 **修复**：
 
-```bash
-# 浏览器开 https://www.cninfo.com.cn → 任意页面 → DevTools → Network
-# → 找一个 XHR 请求 → Headers → Request Headers → 复制整段 Cookie
-
-cd apps/api
-pnpm exec wrangler secret put CNINFO_COOKIE
-# 粘贴新 Cookie
-```
-
-**长期方案**：换更稳定的数据源（东方财富 datacenter API）。当前 `apps/api/src/services/eastmoney.ts` 已经有了基础设施，财报路由切到东财即可。
+1. 检查 API Worker 能否正常访问 `datacenter.eastmoney.com`：
+   ```bash
+   curl -I https://datacenter.eastmoney.com
+   ```
+2. 手动清除该股票的 KV 缓存，下次访问自动重新拉取：
+   ```bash
+   # 通过 /api/financial/:ts_code/sync 接口清除缓存
+   ```
+3. 如持续失败，可能是东方财富 API 接口变更，需检查 `apps/api/src/services/eastmoney.ts` 中的接口地址和字段映射。
 
 ---
 

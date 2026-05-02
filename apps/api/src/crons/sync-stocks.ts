@@ -53,10 +53,11 @@ export async function syncStocks(env: Env): Promise<void> {
           .onConflictDoNothing();
       }
 
-      // 1b. Upsert stockDaily 日线数据（东方财富实时行情 → 近似日K）
-      // 注意：实时行情是盘中数据，收盘后才是当日真实收盘价
-      // 东方财富 push2 接口在收盘后会推送结算数据，可直接用
+      // 1b. Upsert stockDaily 日线数据
+      // 收盘后用实时行情列表数据，current_price 即为当日收盘价
       if (item.current_price > 0) {
+        const preClose = item.current_price / (1 + item.pct_chg / 100);
+        const change = item.current_price - preClose;
         await db
           .insert(stockDaily)
           .values({
@@ -66,8 +67,8 @@ export async function syncStocks(env: Env): Promise<void> {
             high: item.high,
             low: item.low,
             close: item.current_price,
-            pre_close: item.current_price / (1 + item.pct_chg / 100),
-            change: item.pct_chg * item.current_price / 100,
+            pre_close: preClose,
+            change: change,
             pct_chg: item.pct_chg,
             vol: item.volume,
             amount: item.amount,
@@ -79,8 +80,8 @@ export async function syncStocks(env: Env): Promise<void> {
               high: item.high,
               low: item.low,
               close: item.current_price,
-              pre_close: item.current_price - item.pct_chg * item.current_price / 100,
-              change: item.pct_chg * item.current_price / 100,
+              pre_close: preClose,
+              change: change,
               pct_chg: item.pct_chg,
               vol: item.volume,
               amount: item.amount,

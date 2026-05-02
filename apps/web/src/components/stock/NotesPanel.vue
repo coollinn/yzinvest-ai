@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useQuery, useQueryClient } from "@tanstack/vue-query";
-import { ref, watch } from "vue";
+import { ref, watch, computed } from "vue";
 import { Trash2 } from "lucide-vue-next";
 import { useRouter } from "vue-router";
 import Button from "@/components/ui/Button.vue";
@@ -9,8 +9,13 @@ import CardContent from "@/components/ui/CardContent.vue";
 import CardHeader from "@/components/ui/CardHeader.vue";
 import Input from "@/components/ui/Input.vue";
 import Label from "@/components/ui/Label.vue";
-import { apiDelete, apiGet, apiPost, ApiException } from "@/lib/api";
+import { apiDelete, apiGet, apiPost } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth";
+import {
+  deleteLocalNote,
+  getLocalNote,
+  upsertLocalNote,
+} from "@/composables/useLocalStorage";
 import type { Note } from "@yzinvest/shared";
 
 const props = defineProps<{ tsCode: string }>();
@@ -23,6 +28,9 @@ const rating = ref<number | null>(null);
 const tags = ref("");
 const analysisType = ref<"DCF" | "CAPM" | "Technical" | "Fundamental" | "Other">("Other");
 
+// 本地笔记
+const localNote = computed(() => getLocalNote(props.tsCode));
+
 const { data: notes, refetch } = useQuery({
   queryKey: ["notes", () => props.tsCode],
   queryFn: () =>
@@ -32,21 +40,50 @@ const { data: notes, refetch } = useQuery({
   enabled: () => auth.isAuthenticated,
 });
 
-watch(
-  () => notes.value?.items?.[0],
-  (n) => {
+// 加载数据（API 或本地）
+function loadData() {
+  if (auth.isAuthenticated) {
+    const n = notes.value?.items?.[0];
     if (n) {
       content.value = n.content;
       rating.value = n.rating;
       tags.value = (n.tags ?? []).join(", ");
       analysisType.value = (n.analysis_type as typeof analysisType.value) ?? "Other";
+      return;
+    }
+  } else {
+    const n = localNote.value;
+    if (n) {
+      content.value = n.content;
+      rating.value = n.rating ?? null;
+      tags.value = (n.tags ?? []).join(", ");
+      analysisType.value = (n.analysis_type as typeof analysisType.value) ?? "Other";
+      return;
     }
   }
+  // 没有数据时重置
+  content.value = "";
+  rating.value = null;
+  tags.value = "";
+  analysisType.value = "Other";
+}
+
+watch(
+  () => [notes.value?.items?.[0], localNote.value, auth.isAuthenticated],
+  () => loadData(),
+  { immediate: true }
 );
 
 async function save() {
   if (!auth.isAuthenticated) {
-    router.push({ name: "login", query: { redirect: router.currentRoute.value.fullPath } });
+    upsertLocalNote({
+      ts_code: props.tsCode,
+      content: content.value,
+      rating: rating.value ?? undefined,
+      tags: tags.value ? tags.value.split(",").map((s) => s.trim()).filter(Boolean) : [],
+      analysis_type: analysisType.value,
+    });
+    qc.invalidateQueries({ queryKey: ["my-notes"] });
     return;
   }
   await apiPost("/notes", {
@@ -59,24 +96,38 @@ async function save() {
   await refetch();
 }
 
-async function remove(id: number) {
-  await apiDelete(`/notes/${id}`);
-  content.value = "";
-  rating.value = null;
-  tags.value = "";
-  await refetch();
+async function remove() {
+  if (!auth.isAuthenticated) {
+    deleteLocalNote(props.tsCode);
+    content.value = "";
+    rating.value = null;
+    tags.value = "";
+    qc.invalidateQueries({ queryKey: ["my-notes"] });
+    return;
+  }
+  const id = notes.value?.items?.[0]?.id;
+  if (id) {
+    await apiDelete(`/notes/${id}`);
+    content.value = "";
+    rating.value = null;
+    tags.value = "";
+    await refetch();
+  }
 }
+
+const hasNote = computed(() => {
+  if (auth.isAuthenticated) return !!notes.value?.items?.[0];
+  return !!localNote.value;
+});
 </script>
 
 <template>
-  <Card v-if="!auth.isAuthenticated">
-    <CardContent class="py-12 text-center text-sm text-muted-foreground">
-      请<router-link to="/login" class="font-medium text-foreground underline-offset-4 hover:underline">登录</router-link>后查看和编辑笔记
-    </CardContent>
-  </Card>
-  <Card v-else>
+  <Card>
     <CardHeader>
-      <h3 class="text-lg font-semibold">投研笔记</h3>
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-semibold">投研笔记</h3>
+        <span v-if="!auth.isAuthenticated" class="text-xs text-muted-foreground">本地保存</span>
+      </div>
     </CardHeader>
     <CardContent class="space-y-4">
       <div class="grid grid-cols-3 gap-3">
@@ -112,16 +163,19 @@ async function remove(id: number) {
         />
       </div>
       <div class="flex items-center justify-between">
-        <Button @click="save">保存笔记</Button>
+        <Button @click="save">{{ hasNote ? "更新笔记" : "保存笔记" }}</Button>
         <Button
-          v-if="notes?.items?.[0]"
+          v-if="hasNote"
           variant="ghost"
           size="sm"
-          @click="remove(notes.items[0].id)"
+          @click="remove"
         >
           <Trash2 class="h-3.5 w-3.5" /> 删除
         </Button>
       </div>
+      <p v-if="!auth.isAuthenticated" class="text-xs text-muted-foreground">
+        未登录，笔记仅保存在本地浏览器。<router-link to="/login" class="underline">登录</router-link>后可同步到云端。
+      </p>
     </CardContent>
   </Card>
 </template>

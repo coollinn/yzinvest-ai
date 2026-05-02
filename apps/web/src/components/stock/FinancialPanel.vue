@@ -59,7 +59,7 @@ function periodOrder(periodType: string): number {
       <div v-else-if="error" class="space-y-3">
         <p class="text-sm text-destructive">{{ (error as Error).message }}</p>
         <p class="text-sm text-muted-foreground">
-          首次访问会触发后端从 cninfo 拉取，可能需要 3-5 秒。失败后请点"同步"再试。
+          首次访问会触发后端从东方财富拉取，可能需要 3-5 秒。失败后请点"同步"再试。
         </p>
       </div>
       <div v-else-if="!data || Object.keys(data.data ?? {}).length === 0" class="text-sm text-muted-foreground">
@@ -118,7 +118,7 @@ function periodOrder(periodType: string): number {
             </table>
           </div>
         </div>
-        <p class="text-xs text-muted-foreground">单位：万元；数据来源 cninfo.com.cn</p>
+        <p class="text-xs text-muted-foreground">数据来源：东方财富</p>
       </div>
     </CardContent>
   </Card>

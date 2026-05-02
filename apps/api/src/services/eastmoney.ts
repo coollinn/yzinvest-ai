@@ -52,14 +52,14 @@ function fmtDate(d: Date): string {
 // 实时行情（单股）
 // --------------------------------------------------------------------------
 
-// ulist API 字段（fltt=2 已生效）：
-// f43=最新价(元) f44=涨跌额(元) f45=涨跌幅%(需/100) f46=成交量(手)
-// f47=成交额(元) f48=今开(元) f49=最高(元) f50=最低(元)
-// f51=今收(元) f52=昨收(元) f57=代码 f58=名称
-// f107=市盈率TTM(需/100) f116=市净率(需/100) f117=总市值(元)
-// f173=市销率TTM(需/100) f204=流通市值(元) f205=市盈率动态(需/100)
+// stock/get API 字段映射（fltt=2 价格已是元，invt=2 成交量已是手）：
+// f43=最新价(元) f44=最高(元) f45=最低(元) f46=今开(元)
+// f47=成交量(手) f48=成交额(元) f50=换手率(%)
+// f57=代码 f58=名称 f60=昨收(元)
+// f116=总市值(元) f117=流通市值(元)
+// f162=市盈率TTM f167=市净率 f168=量比
 const QUOTE_FIELDS =
-  "f43,f44,f45,f46,f47,f48,f49,f50,f51,f52,f57,f58,f107,f116,f117,f173,f204,f205";
+  "f43,f44,f45,f46,f47,f48,f50,f57,f58,f60,f116,f117,f162,f167,f168";
 
 export interface Quote {
   ts_code: string;
@@ -79,6 +79,7 @@ export interface Quote {
   market_cap: number | null; // 总市值（亿元）
   circulating_market_cap: number | null; // 流通市值（亿元）
   ps_ttm: number | null;
+  turnover: number | null; // 换手率 %
 }
 
 /**
@@ -103,42 +104,45 @@ export async function fetchQuote(ts_code: string): Promise<Quote | null> {
         f46?: number;
         f47?: number;
         f48?: number;
-        f49?: number;
         f50?: number;
-        f51?: number;
-        f52?: number;
         f57?: string;
         f58?: string;
-        f107?: number;
+        f60?: number;
         f116?: number;
         f117?: number;
-        f173?: number;
-        f204?: number;
-        f205?: number;
+        f162?: number;
+        f167?: number;
+        f168?: number;
       };
     };
 
     const d = json.data;
     if (!d || !d.f57) return null;
 
+    const current = d.f43 ?? 0;
+    const preClose = d.f60 ?? 0;
+    const change = preClose > 0 ? current - preClose : 0;
+    const pctChg = preClose > 0 ? (change / preClose) * 100 : 0;
+
     return {
       ts_code: `${d.f57}.${secid.startsWith("1") ? "SH" : "SZ"}`,
       name: d.f58 ?? "",
-      current_price: (d.f43 ?? 0) / 100,
-      price_change: (d.f44 ?? 0) / 100,
-      pct_chg: (d.f45 ?? 0) / 100,
-      volume: d.f46 ?? 0,
-      amount: d.f47 ?? 0,
-      open: (d.f48 ?? 0) / 100,
-      high: (d.f49 ?? 0) / 100,
-      low: (d.f50 ?? 0) / 100,
-      close: (d.f51 ?? 0) / 100,
-      pre_close: (d.f52 ?? 0) / 100,
-      pe_ttm: d.f107 ? d.f107 / 100 : null,
-      pb: d.f116 ? d.f116 / 100 : null,
-      market_cap: d.f117 ? d.f117 / 100000000 : null,
-      circulating_market_cap: d.f204 ? d.f204 / 100000000 : null,
-      ps_ttm: d.f173 ? d.f173 / 100 : null,
+      current_price: current,
+      price_change: change,
+      pct_chg: pctChg,
+      volume: d.f47 ?? 0,
+      amount: d.f48 ?? 0,
+      open: d.f46 ?? 0,
+      high: d.f44 ?? 0,
+      low: d.f45 ?? 0,
+      close: current,
+      pre_close: preClose,
+      pe_ttm: d.f162 ?? null,
+      pb: d.f167 ?? null,
+      market_cap: d.f116 ? d.f116 / 100000000 : null,
+      circulating_market_cap: d.f117 ? d.f117 / 100000000 : null,
+      ps_ttm: null,
+      turnover: d.f50 ?? null,
     };
   } catch {
     return null;
@@ -173,18 +177,15 @@ export async function fetchQuotes(ts_codes: string[]): Promise<Quote[]> {
           f46?: number;
           f47?: number;
           f48?: number;
-          f49?: number;
           f50?: number;
-          f51?: number;
-          f52?: number;
           f57?: string;
           f58?: string;
-          f107?: number;
+          f60?: number;
           f116?: number;
           f117?: number;
-          f173?: number;
-          f204?: number;
-          f205?: number;
+          f162?: number;
+          f167?: number;
+          f168?: number;
         }>;
       };
     };
@@ -194,24 +195,29 @@ export async function fetchQuotes(ts_codes: string[]): Promise<Quote[]> {
       .map((d) => {
         if (!d.f57) return null;
         const m = d.f57.startsWith("6") ? "SH" : "SZ";
+        const current = d.f43 ?? 0;
+        const preClose = d.f60 ?? 0;
+        const change = preClose > 0 ? current - preClose : 0;
+        const pctChg = preClose > 0 ? (change / preClose) * 100 : 0;
         return {
           ts_code: `${d.f57}.${m}`,
           name: d.f58 ?? "",
-          current_price: (d.f43 ?? 0) / 100,
-          price_change: (d.f44 ?? 0) / 100,
-          pct_chg: (d.f45 ?? 0) / 100,
-          volume: d.f46 ?? 0,
-          amount: d.f47 ?? 0,
-          open: (d.f48 ?? 0) / 100,
-          high: (d.f49 ?? 0) / 100,
-          low: (d.f50 ?? 0) / 100,
-          close: (d.f51 ?? 0) / 100,
-          pre_close: (d.f52 ?? 0) / 100,
-          pe_ttm: d.f107 ? d.f107 / 100 : null,
-          pb: d.f116 ? d.f116 / 100 : null,
-          market_cap: d.f117 ? d.f117 / 100000000 : null,
-          circulating_market_cap: d.f204 ? d.f204 / 100000000 : null,
-          ps_ttm: d.f173 ? d.f173 / 100 : null,
+          current_price: current,
+          price_change: change,
+          pct_chg: pctChg,
+          volume: d.f47 ?? 0,
+          amount: d.f48 ?? 0,
+          open: d.f46 ?? 0,
+          high: d.f44 ?? 0,
+          low: d.f45 ?? 0,
+          close: current,
+          pre_close: preClose,
+          pe_ttm: d.f162 ?? null,
+          pb: d.f167 ?? null,
+          market_cap: d.f116 ? d.f116 / 100000000 : null,
+          circulating_market_cap: d.f117 ? d.f117 / 100000000 : null,
+          ps_ttm: null,
+          turnover: d.f50 ?? null,
         } as Quote;
       })
       .filter(Boolean) as Quote[];
@@ -447,73 +453,96 @@ export async function fetchStockList(
 }
 
 // --------------------------------------------------------------------------
-// 财务指标
+// 财务指标（HSF10 接口）
 // --------------------------------------------------------------------------
 
-// 东方财富财务指标字段：
-// BASIC_EPS=每股收益(元) BPS=每股净资产(元) ROE_AVG=净资产收益率(%)
-// PE_TTM=市盈率TTM PB_LYR=市净率(动) YOYGR=营收增速(%) YOYNI=净利润增速(%)
-// SQQY=市销率TTM IOG=投入资本回报率(%) GPR=销售毛利率(%)
-// NETPROFIT=归属净利润(万元) TURNOVER=周转率(%) DEBTEQUITYR=资产负债率(%)
+const DCWEB_BASE = "https://datacenter-web.eastmoney.com";
+
+// 主要财务指标字段：
+// BASIC_EPS=每股收益(元) DEDUCT_BASIC_EPS=扣非每股收益(元)
+// TOTAL_OPERATE_INCOME=营业总收入(元) PARENT_NETPROFIT=归母净利润(元)
+// WEIGHTAVG_ROE=加权ROE(%) BPS=每股净资产(元) MGJYXJJE=每股经营现金流(元)
+// XSMLL=销售毛利率(%) YSTZ=营收同比(%) SJLTZ=净利润同比(%)
+// YSHZ=营收环比(%) SJLHZ=净利润环比(%) ZXGXL=最新股息率
 export interface EmFinancialIndicator {
   SECURITY_CODE: string;
-  REPORT_DATE: string;
+  SECURITY_NAME_ABBR: string | null;
+  REPORTDATE: string; // YYYY-MM-DD HH:MM:SS
+  REPORT_DATE: string; // YYYY-MM-DD（标准化后）
   BASIC_EPS: number | null;
+  DEDUCT_BASIC_EPS: number | null;
+  TOTAL_OPERATE_INCOME: number | null; // 元
+  PARENT_NETPROFIT: number | null; // 元
+  WEIGHTAVG_ROE: number | null; // %
   BPS: number | null;
-  ROE_AVG: number | null; // %
-  PE_TTM: number | null;
-  PB_LYR: number | null;
-  YOYGR: number | null; // %
-  YOYNI: number | null; // %
-  SQQY: number | null; // 市销率TTM
-  IOG: number | null; // %
-  GPR: number | null; // %
-  NETPROFIT: number | null; // 万元
-  TURNOVER: number | null; // %
-  DEBTEQUITYR: number | null; // %
+  MGJYXJJE: number | null; // 每股经营现金流
+  XSMLL: number | null; // 销售毛利率 %
+  YSTZ: number | null; // 营收同比 %
+  SJLTZ: number | null; // 净利润同比 %
+  YSHZ: number | null; // 营收环比 %
+  SJLHZ: number | null; // 净利润环比 %
+  ZXGXL: number | null; // 最新股息率
+  DATATYPE: string | null; // "2025年 年报" 等
+  QDATE: string | null; // "2025Q4"
+  DATEMMDD: string | null; // "年报"/"半年报"/"一季报"/"三季报"
+  ASSIGNDSCRPT: string | null; // 分红送配
+  PUBLISHNAME: string | null; // 行业
 }
 
 /**
- * 获取财务指标（近40期，最新优先）
+ * 获取财务指标（最近 N 期）
+ * @param ts_code 股票代码
+ * @param pageSize 拉取期数（默认20，最大52）
  */
 export async function fetchFinancialIndicator(
-  ts_code: string
+  ts_code: string,
+  pageSize = 20
 ): Promise<EmFinancialIndicator[]> {
   try {
-    const url = new URL(
-      `${DC_BASE}/securities/api/data/v1/get?reportName=RPT_FCI_PCST&columns=SECURITY_CODE,REPORT_DATE,BASIC_EPS,BPS,ROE_AVG,PE_TTM,PB_LYR,YOYGR,YOYNI,SQQY,IOG,GPR,NETPROFIT,TURNOVER,DEBTEQUITYR&filter=(SECURITY_CODE%3D%22${ts_code.split(".")[0]}%22)&pageNumber=1&pageSize=40&sortTypes=-1&sortColumns=REPORT_DATE&source=DataCenter&client=PC`
-    );
+    const code = ts_code.split(".")[0];
+    const url = `${DCWEB_BASE}/api/data/v1/get?reportName=RPT_LICO_FN_CPD&columns=ALL&filter=(SECURITY_CODE%3D%22${code}%22)&pageNumber=1&pageSize=${pageSize}&sortTypes=-1&sortColumns=REPORTDATE&source=HSF10&client=PC`;
 
-    const res = await fetch(url.toString(), {
-      headers: { Referer: "https://finance.eastmoney.com/" },
+    const res = await fetch(url, {
+      headers: { Referer: "https://emweb.securities.eastmoney.com/" },
     });
     if (!res.ok) return [];
 
     const json = (await res.json()) as {
-      data?: {
-        result?: {
-          data?: Array<Record<string, unknown>>;
-        };
-      };
+      success?: boolean;
+      result?: { data?: Array<Record<string, unknown>> };
     };
 
-    return (json.data?.result?.data ?? []).map((d) => ({
-      SECURITY_CODE: String(d.SECURITY_CODE ?? ""),
-      REPORT_DATE: String(d.REPORT_DATE ?? ""),
-      BASIC_EPS: d.BASIC_EPS ? Number(d.BASIC_EPS) : null,
-      BPS: d.BPS ? Number(d.BPS) : null,
-      ROE_AVG: d.ROE_AVG ? Number(d.ROE_AVG) : null,
-      PE_TTM: d.PE_TTM ? Number(d.PE_TTM) : null,
-      PB_LYR: d.PB_LYR ? Number(d.PB_LYR) : null,
-      YOYGR: d.YOYGR ? Number(d.YOYGR) : null,
-      YOYNI: d.YOYNI ? Number(d.YOYNI) : null,
-      SQQY: d.SQQY ? Number(d.SQQY) : null,
-      IOG: d.IOG ? Number(d.IOG) : null,
-      GPR: d.GPR ? Number(d.GPR) : null,
-      NETPROFIT: d.NETPROFIT ? Number(d.NETPROFIT) : null,
-      TURNOVER: d.TURNOVER ? Number(d.TURNOVER) : null,
-      DEBTEQUITYR: d.DEBTEQUITYR ? Number(d.DEBTEQUITYR) : null,
-    })) as EmFinancialIndicator[];
+    if (!json.success) return [];
+
+    return (json.result?.data ?? []).map((d) => {
+      const rd = String(d.REPORTDATE ?? "").substring(0, 10);
+      return {
+        SECURITY_CODE: String(d.SECURITY_CODE ?? ""),
+        SECURITY_NAME_ABBR: (d.SECURITY_NAME_ABBR as string) ?? null,
+        REPORTDATE: String(d.REPORTDATE ?? ""),
+        REPORT_DATE: rd,
+        BASIC_EPS: d.BASIC_EPS != null ? Number(d.BASIC_EPS) : null,
+        DEDUCT_BASIC_EPS: d.DEDUCT_BASIC_EPS != null ? Number(d.DEDUCT_BASIC_EPS) : null,
+        TOTAL_OPERATE_INCOME:
+          d.TOTAL_OPERATE_INCOME != null ? Number(d.TOTAL_OPERATE_INCOME) : null,
+        PARENT_NETPROFIT:
+          d.PARENT_NETPROFIT != null ? Number(d.PARENT_NETPROFIT) : null,
+        WEIGHTAVG_ROE: d.WEIGHTAVG_ROE != null ? Number(d.WEIGHTAVG_ROE) : null,
+        BPS: d.BPS != null ? Number(d.BPS) : null,
+        MGJYXJJE: d.MGJYXJJE != null ? Number(d.MGJYXJJE) : null,
+        XSMLL: d.XSMLL != null ? Number(d.XSMLL) : null,
+        YSTZ: d.YSTZ != null ? Number(d.YSTZ) : null,
+        SJLTZ: d.SJLTZ != null ? Number(d.SJLTZ) : null,
+        YSHZ: d.YSHZ != null ? Number(d.YSHZ) : null,
+        SJLHZ: d.SJLHZ != null ? Number(d.SJLHZ) : null,
+        ZXGXL: d.ZXGXL != null ? Number(d.ZXGXL) : null,
+        DATATYPE: (d.DATATYPE as string) ?? null,
+        QDATE: (d.QDATE as string) ?? null,
+        DATEMMDD: (d.DATEMMDD as string) ?? null,
+        ASSIGNDSCRPT: (d.ASSIGNDSCRPT as string) ?? null,
+        PUBLISHNAME: (d.PUBLISHNAME as string) ?? null,
+      };
+    });
   } catch {
     return [];
   }
@@ -523,23 +552,23 @@ export async function fetchFinancialIndicator(
 export async function fetchLatestIndicator(
   ts_code: string
 ): Promise<EmFinancialIndicator | null> {
-  const rows = await fetchFinancialIndicator(ts_code);
+  const rows = await fetchFinancialIndicator(ts_code, 1);
   return rows[0] ?? null;
 }
 
 // --------------------------------------------------------------------------
-// 财务报表（利润表/资产负债表/现金流量表）
+// 财务报表（利润表 / 资产负债表 / 现金流量表）
 // --------------------------------------------------------------------------
 
 type ReportName =
-  | "RPT_LICO_FN_CPD" // 合并利润表
-  | "RPT_DMSK_FN_BAL" // 资产负债表
-  | "RPT_DMSK_FN_CAS"; // 现金流量表
+  | "RPT_DMSK_FN_INCOME" // 利润表
+  | "RPT_DMSK_FN_BALANCE" // 资产负债表
+  | "RPT_DMSK_FN_CASHFLOW"; // 现金流量表
 
 const REPORT_NAME_MAP: Record<string, ReportName> = {
-  income_statement: "RPT_LICO_FN_CPD",
-  balance_sheet: "RPT_DMSK_FN_BAL",
-  cash_flow: "RPT_DMSK_FN_CAS",
+  income_statement: "RPT_DMSK_FN_INCOME",
+  balance_sheet: "RPT_DMSK_FN_BALANCE",
+  cash_flow: "RPT_DMSK_FN_CASHFLOW",
 };
 
 /**
@@ -553,24 +582,20 @@ export async function fetchFinancialReport(
 ): Promise<Array<Record<string, unknown>>> {
   try {
     const reportName = REPORT_NAME_MAP[reportType];
-    const url = new URL(
-      `${DC_BASE}/securities/api/data/v1/get?reportName=${reportName}&columns=SECURITY_CODE,REPORT_DATE,REPORT_TYPE,PARENT_CODE&filter=(SECURITY_CODE%3D%22${ts_code.split(".")[0]}%22)&pageNumber=1&pageSize=20&sortTypes=-1&sortColumns=REPORT_DATE&source=DataCenter&client=PC`
-    );
+    const url = `${DCWEB_BASE}/api/data/v1/get?reportName=${reportName}&columns=ALL&filter=(SECUCODE%3D%22${ts_code}%22)&pageNumber=1&pageSize=40&sortTypes=-1&sortColumns=REPORT_DATE&source=HSF10&client=PC`;
 
-    const res = await fetch(url.toString(), {
-      headers: { Referer: "https://finance.eastmoney.com/" },
+    const res = await fetch(url, {
+      headers: { Referer: "https://emweb.securities.eastmoney.com/" },
     });
     if (!res.ok) return [];
 
     const json = (await res.json()) as {
-      data?: {
-        result?: {
-          data?: Array<Record<string, unknown>>;
-        };
-      };
+      success?: boolean;
+      result?: { data?: Array<Record<string, unknown>> };
     };
 
-    return json.data?.result?.data ?? [];
+    if (!json.success) return [];
+    return json.result?.data ?? [];
   } catch {
     return [];
   }

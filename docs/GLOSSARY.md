@@ -189,8 +189,8 @@ margin = (intrinsic_value − market_cap) / market_cap
 |------|------|
 | `VITE_API_BASE` | 前端 API 路径前缀，本地默认 `/api` |
 | `JWT_SECRET` | 签 JWT 用，32 字节 hex |
-| `TUSHARE_TOKEN` | Tushare API token（旧数据源，已弃用）|
-| `CNINFO_COOKIE` | cninfo.com.cn 抓财报用（旧）|
+| `TUSHARE_TOKEN` | ~~Tushare API token~~（已删除）|
+| `CNINFO_COOKIE` | ~~cninfo.com.cn 抓财报用~~（已删除）|
 | `CORS_ORIGINS` | API 允许的前端域名白名单 |
 | `CLOUDFLARE_API_TOKEN` | CI 部署用（GitHub Secret）|
 | `CLOUDFLARE_ACCOUNT_ID` | CF 账号 ID（GitHub Secret）|

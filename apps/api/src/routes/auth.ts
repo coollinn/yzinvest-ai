@@ -161,6 +161,70 @@ app.get("/me", requireAuth, async (c) => {
   );
 });
 
+app.post("/change-password", requireAuth, async (c) => {
+  const body = await readJson<{ old_password: string; new_password: string }>(c);
+  if (!body?.old_password || !body?.new_password) {
+    throw new ApiError(400, "old_password and new_password required");
+  }
+  if (body.new_password.length < 6) {
+    throw new ApiError(400, "new_password must be at least 6 characters");
+  }
+
+  const user = c.get("user")!;
+  const db = createDb(c.env.DB);
+
+  const [dbUser] = await db.select().from(users).where(eq(users.id, user.id)).limit(1);
+  if (!dbUser) throw new ApiError(404, "User not found");
+
+  const valid = await verifyPassword(body.old_password, dbUser.password_hash);
+  if (!valid) throw new ApiError(401, "Old password is incorrect");
+
+  const newHash = await hashPassword(body.new_password);
+  await db
+    .update(users)
+    .set({ password_hash: newHash, updated_at: new Date().toISOString() })
+    .where(eq(users.id, user.id));
+
+  return c.json(ok({ message: "Password changed successfully" }));
+});
+
+app.put("/me", requireAuth, async (c) => {
+  const user = c.get("user")!;
+  const body = await readJson<{ full_name?: string; email?: string }>(c);
+  const db = createDb(c.env.DB);
+
+  const [existing] = await db.select().from(users).where(eq(users.id, user.id)).limit(1);
+  if (!existing) throw new ApiError(404, "User not found");
+
+  // 邮箱唯一性检查
+  if (body.email && body.email !== existing.email) {
+    const [dup] = await db.select().from(users).where(eq(users.email, body.email)).limit(1);
+    if (dup) throw new ApiError(409, "Email already in use");
+  }
+
+  const [updated] = await db
+    .update(users)
+    .set({
+      ...(body.full_name !== undefined ? { full_name: body.full_name } : {}),
+      ...(body.email !== undefined ? { email: body.email } : {}),
+      updated_at: new Date().toISOString(),
+    })
+    .where(eq(users.id, user.id))
+    .returning();
+
+  return c.json(
+    ok({
+      id: updated.id,
+      username: updated.username,
+      email: updated.email,
+      full_name: updated.full_name,
+      role: updated.role,
+      created_at: updated.created_at,
+      updated_at: updated.updated_at,
+    })
+  );
+});
+
 app.post("/logout", requireAuth, async (c) => {
   // 无状态 JWT，前端清掉 token 即可。后续如需黑名单可走 KV。
   return c.json(ok({ message: "Logged out" }));

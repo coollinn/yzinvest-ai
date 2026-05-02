@@ -2,7 +2,7 @@ import { PaginationQuery } from "@yzinvest/shared";
 import { and, asc, desc, eq, like, or, sql } from "drizzle-orm";
 import { Hono, type Context } from "hono";
 import { createDb } from "../db/client";
-import { financialData, stockDaily, stocks } from "../db/schema";
+import { stockDaily, stocks } from "../db/schema";
 import { ApiError, ok, paginate } from "../lib/responses";
 import { fetchQuote, fetchQuotes, fetchStockList, tsCodeToSecid } from "../services/eastmoney";
 import type { Env, Variables } from "../types";
@@ -173,8 +173,8 @@ app.get("/:identifier/detail", async (c) => {
   const identifier = c.req.param("identifier");
   const stock = await loadStock(c, identifier);
 
-  // 并行拉取：本地日线 + 东方财富实时行情 + 财务记录数
-  const [latestDaily, quote, finCount] = await Promise.all([
+  // 并行拉取：本地日线 + 东方财富实时行情
+  const [latestDaily, quote] = await Promise.all([
     db
       .select()
       .from(stockDaily)
@@ -183,10 +183,6 @@ app.get("/:identifier/detail", async (c) => {
       .limit(1)
       .then((r) => r[0] ?? null),
     fetchQuote(stock.ts_code).catch(() => null),
-    db
-      .select({ count: sql<number>`count(*)` })
-      .from(financialData)
-      .where(eq(financialData.ts_code, stock.ts_code)),
   ]);
 
   return c.json(
@@ -206,7 +202,6 @@ app.get("/:identifier/detail", async (c) => {
       },
       quote_source: quote ? "eastmoney" : "database",
       has_real_data: !!latestDaily || !!quote,
-      has_financial_data: Number(finCount[0]?.count ?? 0) > 0,
       secid: tsCodeToSecid(stock.ts_code),
     })
   );
