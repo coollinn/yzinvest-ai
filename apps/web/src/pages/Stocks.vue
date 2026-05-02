@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { keepPreviousData, useQuery } from "@tanstack/vue-query";
 import { ChevronLeft, ChevronRight, Search } from "lucide-vue-next";
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 import Button from "@/components/ui/Button.vue";
 import Input from "@/components/ui/Input.vue";
@@ -13,27 +13,52 @@ const page = ref(1);
 const limit = ref(30);
 const searchQuery = ref("");
 
-const { data, isLoading, isFetching } = useQuery({
+// 搜索模式：有关键词时调用 /api/stocks/search（全库搜索），否则分页列表
+const isSearchMode = computed(() => searchQuery.value.trim().length > 0);
+
+// 搜索时重置到第 1 页
+watch(searchQuery, () => {
+  page.value = 1;
+});
+
+// 普通分页列表
+const { data: listData, isLoading: listLoading, isFetching: listFetching } = useQuery({
   queryKey: ["stocks", page, limit],
   queryFn: () =>
     apiGet<ListResponse<Stock>>(`/stocks?page=${page.value}&limit=${limit.value}`),
   placeholderData: keepPreviousData,
+  enabled: computed(() => !isSearchMode.value),
 });
 
-// 搜索过滤
+// 全库搜索（调用后端 /api/stocks/search）
+interface SearchResult {
+  items: Stock[];
+  count: number;
+  query: string;
+}
+const { data: searchData, isLoading: searchLoading } = useQuery({
+  queryKey: ["stocks-search", searchQuery],
+  queryFn: () =>
+    apiGet<SearchResult>(`/stocks/search?q=${encodeURIComponent(searchQuery.value.trim())}&limit=50`),
+  placeholderData: keepPreviousData,
+  enabled: computed(() => isSearchMode.value),
+});
+
+// 当前显示的数据
 const filteredItems = computed(() => {
-  if (!searchQuery.value.trim()) return data.value?.items ?? [];
-  const q = searchQuery.value.toLowerCase();
-  return (data.value?.items ?? []).filter(
-    (s) =>
-      s.name?.toLowerCase().includes(q) ||
-      s.symbol?.toLowerCase().includes(q) ||
-      s.industry?.toLowerCase().includes(q)
-  );
+  if (isSearchMode.value) return searchData.value?.items ?? [];
+  return listData.value?.items ?? [];
 });
 
-const totalPages = computed(() => data.value?.pagination.total_pages ?? 1);
-const totalItems = computed(() => data.value?.pagination.total_items ?? 0);
+const isLoading = computed(() => isSearchMode.value ? searchLoading.value : listLoading.value);
+const isFetching = computed(() => !isSearchMode.value && listFetching.value);
+
+// 分页（搜索模式下不分页）
+const totalPages = computed(() => isSearchMode.value ? 1 : (listData.value?.pagination.total_pages ?? 1));
+const totalItems = computed(() => isSearchMode.value
+  ? (searchData.value?.count ?? 0)
+  : (listData.value?.pagination.total_items ?? 0)
+);
 
 function formatDate(dateStr: string | null | undefined) {
   if (!dateStr || dateStr.length !== 8) return "—";
@@ -49,7 +74,12 @@ function formatDate(dateStr: string | null | undefined) {
         <div>
           <h1 class="text-base font-semibold">股票列表</h1>
           <p class="text-xs text-muted-foreground">
-            共 {{ totalItems }} 只上市股票
+            <template v-if="isSearchMode">
+              搜索"{{ searchQuery }}"共 {{ totalItems }} 条结果
+            </template>
+            <template v-else>
+              共 {{ totalItems }} 只上市股票
+            </template>
           </p>
         </div>
         <div class="flex items-center gap-2">
@@ -124,8 +154,8 @@ function formatDate(dateStr: string | null | undefined) {
       </table>
     </div>
 
-    <!-- 分页 -->
-    <footer class="shrink-0 border-t border-border bg-background/95 px-4 py-2">
+    <!-- 分页（搜索模式下隐藏） -->
+    <footer v-if="!isSearchMode" class="shrink-0 border-t border-border bg-background/95 px-4 py-2">
       <div class="flex items-center justify-between">
         <p class="text-[10px] text-muted-foreground">
           第 {{ page }} / {{ totalPages }} 页

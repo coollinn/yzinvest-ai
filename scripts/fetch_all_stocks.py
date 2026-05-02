@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """
-最后更新：2026.05.01
+最后更新：2026.05.02
 从东方财富API获取A股数据，生成SQL和JSON备份文件
 支持全量模式和增量模式（--date / --stocks-only）
-市场覆盖：沪深主板 + 科创板 + 创业板 + 北交所（约12386条）
+市场覆盖：沪市主板 + 深市主板 + 科创板 + 创业板 + 北交所（约12386条）
+含行业信息补充（通过 datacenter.eastmoney.com）
 
 用法：
   python3 fetch_all_stocks.py /tmp/out.sql                    # 全量，今天行情
   python3 fetch_all_stocks.py /tmp/out.sql --date 20260501    # 指定日期行情
   python3 fetch_all_stocks.py /tmp/out.sql --stocks-only      # 仅股票基础信息
   python3 fetch_all_stocks.py /tmp/out.sql --json --backup-dir ./backups  # 同时生成 JSON 备份
+  python3 fetch_all_stocks.py /tmp/out.sql --with-industry   # 补充行业信息（较慢）
 """
 import urllib.request
 import json as _json
@@ -18,16 +20,35 @@ import ssl
 import time
 import argparse
 import os
+import urllib.parse
 from datetime import date, datetime
 
 ctx = ssl.create_default_context()
 ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE
 
+# 行情接口（无行业字段）
 API_BASE = "https://push2delay.eastmoney.com/api/qt/clist/get"
+# 股票基础信息接口（含行业）
+DC_BASE = "https://datacenter.eastmoney.com/api/data/v1/get"
 UT = "bd1d9ddb04089700cf9c27f6f7426281"
-FS_ALL = "m:0+t:6,m:0+t:13,m:0+t:80,m:0+t:81,m:1+t:2,m:1+t:23,m:1+t:80,m:0+t:82,m:1+t:82"
+
+# 市场参数（对照 eastmoney.ts MARKET_CODES，覆盖全A股）
+FS_ALL = "m:1+t:23,m:1+t:80,m:0+t:80,m:0+t:81,m:1+t:2,m:1+t:23,m:0+t:82,m:1+t:82"
+# 说明：
+#   m:1+t:23 = 沪市主板+科创板
+#   m:1+t:80 = 沪市A股
+#   m:0+t:80 = 深市主板
+#   m:0+t:81 = 深市A股
+#   m:1+t:2  = 深市A股（另一分类）
+#   m:0+t:82,m:1+t:82 = 北交所
+# 注：东方财富 fs 参数中 m:0=深市，m:1=沪市；t:23=科创板，t:80=主板，t:81/82=创业板/北交所
+
 FIELDS = "f12,f14,f3,f4,f5,f6,f7,f15,f16,f17,f18,f20"
+
+# ---------------------------------------------------------------------------
+# 行情数据获取
+# ---------------------------------------------------------------------------
 
 def fetch_page(page, page_size, fs):
     params = [
@@ -42,6 +63,63 @@ def fetch_page(page, page_size, fs):
     })
     with urllib.request.urlopen(req, timeout=20, context=ctx) as resp:
         return _json.loads(resp.read().decode("utf-8"))
+
+# ---------------------------------------------------------------------------
+# 行业信息获取（datacenter.eastmoney.com）
+# ---------------------------------------------------------------------------
+
+def fetch_industry_map(ts_codes):
+    """
+    批量获取股票行业信息。
+    通过 datacenter.eastmoney.com RPT_STOCK_BASICINFO 接口获取。
+    返回 {ts_code: industry_name} 字典。
+    ts_codes: list of "600519.SH" format codes
+    """
+    if not ts_codes:
+        return {}
+
+    # 分批处理，每批 200 个代码
+    result = {}
+    batch_size = 200
+
+    for i in range(0, len(ts_codes), batch_size):
+        batch = ts_codes[i:i+batch_size]
+        # 构造 filter 条件：(SECURITY_CODE in ("600519.SH","000001.SZ"))
+        codes_str = ",".join([f'"{c}"' for c in batch])
+        filter_str = f"(SECURITY_CODE in ({codes_str}))"
+        params = {
+            "reportName": "RPT_STOCK_BASICINFO",
+            "columns": "SECURITY_CODE,INDUSTRY_NAME",
+            "filter": filter_str,
+            "pageNumber": "1",
+            "pageSize": str(len(batch)),
+            "sortTypes": "-1",
+            "sortColumns": "SECURITY_CODE",
+        }
+        query = urllib.parse.urlencode(params)
+        url = f"{DC_BASE}?{query}"
+        try:
+            req = urllib.request.Request(url, headers={
+                "Referer": "https://data.eastmoney.com/",
+                "User-Agent": "Mozilla/5.0"
+            })
+            with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
+                data = _json.loads(resp.read().decode("utf-8"))
+            rows = (data.get("result") or {}).get("data") or []
+            for row in rows:
+                code = row.get("SECURITY_CODE") or ""
+                industry = row.get("INDUSTRY_NAME") or ""
+                if code:
+                    result[code] = industry
+        except Exception as e:
+            print(f"  [行业] 批次 {i//batch_size+1} 失败: {e}")
+        time.sleep(0.3)
+
+    return result
+
+# ---------------------------------------------------------------------------
+# 工具函数
+# ---------------------------------------------------------------------------
 
 def esc(s):
     if s is None:
@@ -64,11 +142,12 @@ def safe_float(val, default=0.0):
             return default
     return default
 
-def gen_sql(items, today_str, mode="all"):
+def gen_sql(items, today_str, mode="all", industry_map=None):
     """
     生成 SQL 语句，同时收集用于 JSON 备份的原始数据
     mode=all:     stocks + stock_daily（今天）
     mode=stocks:  仅 stocks（无行情，用于 Layer 1 快速同步）
+    industry_map: {ts_code: industry_name} 字典
     """
     stock_sqls = []
     daily_sqls = []
@@ -84,14 +163,18 @@ def gen_sql(items, today_str, mode="all"):
         is_bj = str(f12).startswith(("4", "8", "9"))
         exchange = "BJ" if is_bj else ("SH" if str(f12).startswith("6") else "SZ")
         ts_code = f"{f12}.{exchange}"
+
+        # 行业信息
+        industry = (industry_map or {}).get(ts_code, "")
+
         stock_sqls.append(
-            f"INSERT INTO stocks (ts_code,symbol,name,exchange,list_status,created_at,updated_at) "
-            f"VALUES ({esc(ts_code)},{esc(f12)},{esc(f14)},{esc(exchange)},'L',datetime('now'),datetime('now')) "
-            f"ON CONFLICT(ts_code) DO UPDATE SET name=excluded.name,symbol=excluded.symbol,updated_at=datetime('now');"
+            f"INSERT INTO stocks (ts_code,symbol,name,exchange,industry,list_status,created_at,updated_at) "
+            f"VALUES ({esc(ts_code)},{esc(f12)},{esc(f14)},{esc(exchange)},{esc(industry)},'L',datetime('now'),datetime('now')) "
+            f"ON CONFLICT(ts_code) DO UPDATE SET name=excluded.name,symbol=excluded.symbol,industry=excluded.industry,updated_at=datetime('now');"
         )
         raw_stocks.append({
             "ts_code": ts_code, "symbol": str(f12), "name": str(f14 or ""),
-            "exchange": exchange, "list_status": "L"
+            "exchange": exchange, "industry": industry, "list_status": "L"
         })
         # 仅在需要行情数据时生成 stock_daily SQL
         if mode != "stocks":
@@ -120,8 +203,12 @@ def gen_sql(items, today_str, mode="all"):
                 })
     return stock_sqls, daily_sqls, raw_stocks, raw_dailys, skipped
 
+# ---------------------------------------------------------------------------
+# 主流程
+# ---------------------------------------------------------------------------
+
 def main():
-    parser = argparse.ArgumentParser(description="东方财富A股数据获取")
+    parser = argparse.ArgumentParser(description="东方财富A股数据获取（含行业信息）")
     parser.add_argument("output", nargs="?", default="/tmp/sync_stocks_full.sql")
     parser.add_argument("--date", dest="trade_date", default=None,
                         help="行情日期，如 20260501（默认今天）")
@@ -133,6 +220,8 @@ def main():
                         help="同时生成 JSON 备份文件")
     parser.add_argument("--backup-dir", default="/Users/leon.chen/WorkBuddy/20260426212833/data_backup",
                         help="JSON 备份目录（默认 WorkBuddy data_backup）")
+    parser.add_argument("--with-industry", action="store_true",
+                        help="补充行业信息（需要额外 API 调用，较慢）")
     args = parser.parse_args()
 
     today_str = args.trade_date or date.today().strftime("%Y%m%d")
@@ -142,6 +231,8 @@ def main():
     mode_desc = "仅股票基础信息" if mode == "stocks" else f"股票+行情({today_str})"
     print(f"📡 获取A股数据（模式: {mode_desc}）...")
     print(f"   每页: {page_size} 条")
+    if args.with_industry:
+        print(f"   ⚡ 行业信息补充: 开启（将额外调用 datacenter API）")
 
     # 获取总数
     data = fetch_page(1, page_size, FS_ALL)
@@ -154,6 +245,7 @@ def main():
     all_daily_sqls = []
     all_raw_stocks = []
     all_raw_dailys = []
+    all_ts_codes = []   # 用于行业查询
     consecutive_errors = 0
 
     for page in range(1, max_pages + 1):
@@ -165,6 +257,14 @@ def main():
             if not items:
                 print(f"  第 {page} 页: 空，停止")
                 break
+
+            # 收集 ts_code 用于行业查询
+            for item in items:
+                f12 = item.get("f12")
+                if f12:
+                    is_bj = str(f12).startswith(("4", "8", "9"))
+                    exchange = "BJ" if is_bj else ("SH" if str(f12).startswith("6") else "SZ")
+                    all_ts_codes.append(f"{f12}.{exchange}")
 
             # 首次请求时用实际 total 修正
             if page == 1 and total == 0:
@@ -197,6 +297,32 @@ def main():
             if consecutive_errors >= 5:
                 print("  连续失败5次，停止（剩余数据可在下次补全）")
                 break
+
+    # 补充行业信息
+    industry_map = {}
+    if args.with_industry and all_ts_codes:
+        print(f"\n📡 补充行业信息（{len(all_ts_codes)} 只股票）...")
+        industry_map = fetch_industry_map(all_ts_codes)
+        print(f"   ✅ 获取到 {len(industry_map)} 条行业信息")
+
+        # 更新 all_raw_stocks 中的行业字段
+        for rs in all_raw_stocks:
+            rs["industry"] = industry_map.get(rs["ts_code"], "")
+
+        # 重新生成 stock_sqls（含行业）
+        print("   重新生成 SQL（含行业）...")
+        all_stock_sqls = []
+        for rs in all_raw_stocks:
+            ts = rs["ts_code"]
+            sym = rs["symbol"]
+            nm = rs["name"]
+            ex = rs["exchange"]
+            ind = rs.get("industry", "")
+            all_stock_sqls.append(
+                f"INSERT INTO stocks (ts_code,symbol,name,exchange,industry,list_status,created_at,updated_at) "
+                f"VALUES ({esc(ts)},{esc(sym)},{esc(nm)},{esc(ex)},{esc(ind)},'L',datetime('now'),datetime('now')) "
+                f"ON CONFLICT(ts_code) DO UPDATE SET name=excluded.name,symbol=excluded.symbol,industry=excluded.industry,updated_at=datetime('now');"
+            )
 
     # 写 SQL
     with open(args.output, "w", encoding="utf-8") as f:
