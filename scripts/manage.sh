@@ -547,6 +547,11 @@ case "$CMD" in
     shift
     daily-sync "$@"
     ;;
+  industry-sync)
+    shift
+    cd "$PROJECT_ROOT"
+    python3 scripts/sync_industry.py "$@"
+    ;;
   deploy)
     deploy
     ;;
@@ -578,6 +583,11 @@ case "$CMD" in
     echo "  db-reset      重置本地数据库"
     echo "  db-query SQL  执行本地 SQL 查询"
     echo ""
+    echo "数据同步:"
+    echo "  stock-sync         全量股票数据同步 (Layer 1)"
+    echo "  industry-sync      补充行业信息（沪深 A 股）"
+    echo "  industry-sync --apply-local   写入本地 D1"
+    echo "  daily-sync         当日行情数据同步 (Layer 2)"
     echo "数据同步:"
     echo "  sync-all         全自动同步（fetch + 本地 + 远程，推荐）"
     echo "  sync-incremental 增量同步（仅同步变化部分，推荐日常使用）"
