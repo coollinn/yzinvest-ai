@@ -7,7 +7,7 @@ export interface AIProvider {
   generateReport(prompt: string): Promise<string>;
 }
 
-export type AIProviderName = "anthropic" | "openai" | "deepseek" | "custom";
+export type AIProviderName = "kimi" | "anthropic" | "openai" | "deepseek" | "custom";
 
 export interface AIProviderConfig {
   name: AIProviderName;
@@ -21,6 +21,7 @@ export interface AIProviderConfig {
 /** 从 Env 构建 provider 配置 */
 export function buildProviderConfig(env: {
   AI_PROVIDER?: string;
+  KIMI_API_KEY?: string;
   ANTHROPIC_API_KEY?: string;
   OPENAI_API_KEY?: string;
   DEEPSEEK_API_KEY?: string;
@@ -28,9 +29,17 @@ export function buildProviderConfig(env: {
   CUSTOM_AI_API_KEY?: string;
   CUSTOM_AI_MODEL?: string;
 }): AIProviderConfig {
-  const provider = (env.AI_PROVIDER ?? "anthropic") as AIProviderName;
+  const provider = (env.AI_PROVIDER ?? "kimi") as AIProviderName;
 
   switch (provider) {
+    case "kimi":
+      return {
+        name: "kimi",
+        apiKey: env.KIMI_API_KEY ?? "",
+        baseUrl: "https://api.kimi.com/coding/v1",
+        model: "kimi-for-coding",
+        maxTokens: 8000,
+      };
     case "anthropic":
       return {
         name: "anthropic",
@@ -63,10 +72,11 @@ export function buildProviderConfig(env: {
       };
     default:
       return {
-        name: "anthropic",
-        apiKey: env.ANTHROPIC_API_KEY ?? "",
-        model: "claude-sonnet-4-6-20251022",
-        maxTokens: 2000,
+        name: "kimi",
+        apiKey: env.KIMI_API_KEY ?? "",
+        baseUrl: "https://api.kimi.com/coding/v1",
+        model: "kimi-for-coding",
+        maxTokens: 8000,
       };
   }
 }

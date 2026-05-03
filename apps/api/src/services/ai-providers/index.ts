@@ -1,6 +1,7 @@
 import { AnthropicProvider } from "./anthropic";
 import { CustomProvider } from "./custom";
 import { DeepSeekProvider } from "./deepseek";
+import { KimiProvider } from "./kimi";
 import { OpenAIProvider } from "./openai";
 import { buildProviderConfig, type AIProvider, type AIProviderConfig, type AIProviderName } from "./types";
 
@@ -13,6 +14,8 @@ export type { AIProvider, AIProviderConfig, AIProviderName };
  */
 export function createAIProvider(config: AIProviderConfig): AIProvider {
   switch (config.name) {
+    case "kimi":
+      return new KimiProvider(config);
     case "anthropic":
       return new AnthropicProvider(config);
     case "openai":
@@ -22,6 +25,6 @@ export function createAIProvider(config: AIProviderConfig): AIProvider {
     case "custom":
       return new CustomProvider(config);
     default:
-      return new AnthropicProvider(config);
+      return new KimiProvider(config);
   }
 }

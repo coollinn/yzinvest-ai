@@ -4,8 +4,9 @@ export interface Env {
   ENVIRONMENT: string;
   CORS_ORIGINS: string;
   JWT_SECRET: string;
-  // AI Provider 配置
-  AI_PROVIDER?: string;           // anthropic | openai | deepseek | custom
+  // AI Provider 配置（默认 kimi）
+  AI_PROVIDER?: string;           // kimi | anthropic | openai | deepseek | custom
+  KIMI_API_KEY?: string;
   ANTHROPIC_API_KEY?: string;
   OPENAI_API_KEY?: string;
   DEEPSEEK_API_KEY?: string;
