@@ -9,6 +9,7 @@ import {
   fetchFinancialReport,
   fetchKline,
 } from "../services/eastmoney";
+import { buildProviderConfig, createAIProvider } from "../services/ai-providers";
 import type { Env, Variables } from "../types";
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -68,7 +69,7 @@ app.get("/:ts_code/backtest", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
-// POST /api/prediction/:ts_code/report — AI 智能研报（Claude API）
+// POST /api/prediction/:ts_code/report — AI 智能研报（支持多 Provider）
 // ---------------------------------------------------------------------------
 app.post("/:ts_code/report", async (c) => {
   const ts_code = c.req.param("ts_code");
@@ -77,11 +78,18 @@ app.post("/:ts_code/report", async (c) => {
   const [stock] = await db.select().from(stocks).where(eq(stocks.ts_code, ts_code)).limit(1);
   if (!stock) throw new ApiError(404, "Stock not found");
 
+  // 初始化 AI Provider
+  const providerConfig = buildProviderConfig(c.env);
+  if (!providerConfig.apiKey && providerConfig.name !== "custom") {
+    throw new ApiError(503, `AI provider ${providerConfig.name} API key not configured`);
+  }
+  const provider = createAIProvider(providerConfig);
+
   // 查缓存（24h）
-  const cacheKey = `pred:report:${ts_code}`;
+  const cacheKey = `pred:report:${ts_code}:${providerConfig.name}`;
   const cached = await c.env.CACHE.get(cacheKey, "json");
   if (cached) {
-    return c.json(ok({ ts_code, source: "cache", ...(cached as object) }));
+    return c.json(ok({ ts_code, source: "cache", provider: providerConfig.name, ...(cached as object) }));
   }
 
   // 并行获取：预测 + 财务指标 + 历史K线
@@ -168,40 +176,13 @@ ${klineSummary
 - 如果营收/净利同比大幅下滑需重点提示
 - 不要给出具体买卖建议，仅作分析参考`;
 
-  // 调用 Claude API
-  const apiKey = c.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new ApiError(503, "AI report service not configured");
-
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6-20251022",
-        max_tokens: 2000,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text().catch(() => "unknown");
-      console.error("Claude API error:", response.status, errText);
-      throw new ApiError(503, `AI service error: ${response.status}`);
-    }
-
-    const aiJson = (await response.json()) as {
-      content?: Array<{ type: string; text?: string }>;
-    };
-
-    const reportText = aiJson.content?.[0]?.text ?? "暂无分析内容";
+    const reportText = await provider.generateReport(prompt);
 
     const result = {
       report: reportText,
-      model: "claude-sonnet-4-6",
+      provider: providerConfig.name,
+      model: providerConfig.model,
       generated_at: new Date().toISOString(),
     };
 
@@ -211,7 +192,7 @@ ${klineSummary
     return c.json(ok({ ts_code, source: "ai", ...result }));
   } catch (err) {
     console.error("AI report generation failed:", err);
-    throw new ApiError(503, "AI report generation failed");
+    throw new ApiError(503, `AI report generation failed: ${(err as Error).message}`);
   }
 });
 

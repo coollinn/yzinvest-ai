@@ -49,9 +49,11 @@
 - [x] 涨跌色（红涨绿跌）
 - [x] 搜索模式同步显示行情
 
-### 4.4 AI 智能研报（P2 - 待后续）
-- [ ] `POST /api/prediction/:ts_code/report` — 接入 Claude API 生成智能研报
-- [ ] PredictionPanel.vue 新增"AI 研报"卡片
+### 4.4 AI 智能研报 ✅
+- [x] `POST /api/prediction/:ts_code/report` — 接入 Claude API 生成智能研报
+- [x] PredictionPanel.vue 新增"AI 研报"卡片
+- [x] 简易 Markdown → HTML 渲染器
+- [x] 研报结构：投资要点 / 技术面分析 / 基本面分析 / 风险提示 / 综合评级
 
 ---
 

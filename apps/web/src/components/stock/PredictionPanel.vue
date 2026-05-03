@@ -46,14 +46,14 @@ const windowDays = ref(30);
 
 // AI 研报
 const reportLoading = ref(false);
-const reportData = ref<{ report: string; model: string; generated_at: string; source: string } | null>(null);
+const reportData = ref<{ report: string; model: string; provider: string; generated_at: string; source: string } | null>(null);
 const reportError = ref("");
 
 async function generateReport() {
   reportLoading.value = true;
   reportError.value = "";
   try {
-    const r = await apiPost<{ report: string; model: string; generated_at: string; source: string }>(
+    const r = await apiPost<{ report: string; model: string; provider: string; generated_at: string; source: string }>(
       `/prediction/${props.tsCode}/report`
     );
     reportData.value = r;
@@ -392,7 +392,7 @@ const sparklinePath = computed(() => {
             v-html="mdToHtml(reportData.report)"
           />
           <p class="mt-3 text-[10px] text-muted-foreground">
-            模型：{{ reportData.model }} · 生成时间：{{ reportData.generated_at?.substring(0, 16).replace('T', ' ') }}
+            Provider: {{ reportData.provider }} / 模型：{{ reportData.model }} · 生成时间：{{ reportData.generated_at?.substring(0, 16).replace('T', ' ') }}
           </p>
         </div>
         <div v-else class="flex flex-col items-center gap-2 py-6 text-center">
