@@ -4,6 +4,7 @@ export interface Env {
   ENVIRONMENT: string;
   CORS_ORIGINS: string;
   JWT_SECRET: string;
+  ANTHROPIC_API_KEY: string;
 }
 
 export interface AuthUser {

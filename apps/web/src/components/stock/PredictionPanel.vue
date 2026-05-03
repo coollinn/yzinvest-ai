@@ -8,7 +8,7 @@ import CardHeader from "@/components/ui/CardHeader.vue";
 import CardTitle from "@/components/ui/CardTitle.vue";
 import Skeleton from "@/components/ui/Skeleton.vue";
 import Badge from "@/components/ui/Badge.vue";
-import { apiGet } from "@/lib/api";
+import { apiGet, apiPost } from "@/lib/api";
 import { formatNumber, colorByChange } from "@/lib/utils";
 import {
   TrendingUp,
@@ -18,11 +18,51 @@ import {
   Target,
   Shield,
   BarChart3,
+  FileText,
+  Sparkles,
 } from "lucide-vue-next";
+
+// 简易 Markdown → HTML（仅支持研报中常见格式）
+function mdToHtml(md: string): string {
+  return md
+    .replace(/### (.+)/g, '<h3 class="text-sm font-bold mt-3 mb-1.5">$1</h3>')
+    .replace(/## (.+)/g, '<h2 class="text-base font-bold mt-4 mb-2">$1</h2>')
+    .replace(/# (.+)/g, '<h1 class="text-lg font-bold mt-4 mb-2">$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/^- (.+)$/gm, '<li class="ml-4 text-xs leading-relaxed">$1</li>')
+    .replace(/^(\d+)\. (.+)$/gm, '<li class="ml-4 text-xs leading-relaxed"><span class="font-medium">$1.</span> $2</li>')
+    .replace(/\n\n/g, '</p><p class="text-xs leading-relaxed mb-2">')
+    .replace(/\n/g, ' ')
+    .replace(/^(.+)$/gm, (m) => {
+      if (m.startsWith('<')) return m;
+      return '<p class="text-xs leading-relaxed mb-2">' + m + '</p>';
+    });
+}
 
 const props = defineProps<{ tsCode: string }>();
 
 const windowDays = ref(30);
+
+// AI 研报
+const reportLoading = ref(false);
+const reportData = ref<{ report: string; model: string; generated_at: string; source: string } | null>(null);
+const reportError = ref("");
+
+async function generateReport() {
+  reportLoading.value = true;
+  reportError.value = "";
+  try {
+    const r = await apiPost<{ report: string; model: string; generated_at: string; source: string }>(
+      `/prediction/${props.tsCode}/report`
+    );
+    reportData.value = r;
+  } catch (e: any) {
+    reportError.value = e.message || "生成失败";
+  } finally {
+    reportLoading.value = false;
+  }
+}
 
 const {
   data: pred,
@@ -322,6 +362,42 @@ const sparklinePath = computed(() => {
               </svg>
             </div>
           </div>
+        </div>
+      </CardContent>
+    </Card>
+
+    <!-- AI 智能研报 -->
+    <Card>
+      <CardHeader class="flex flex-row items-center justify-between">
+        <div class="flex items-center gap-2">
+          <Sparkles class="h-4 w-4 text-accent" />
+          <CardTitle class="text-base">AI 智能研报</CardTitle>
+          <Badge v-if="reportData?.source === 'cache'" variant="secondary" class="text-[10px]">缓存</Badge>
+        </div>
+        <Button :loading="reportLoading" size="sm" variant="outline" @click="generateReport">
+          {{ reportData ? '重新生成' : '生成研报' }}
+        </Button>
+      </CardHeader>
+      <CardContent>
+        <div v-if="reportLoading" class="space-y-2">
+          <Skeleton class="h-4 w-full" />
+          <Skeleton class="h-4 w-5/6" />
+          <Skeleton class="h-4 w-4/6" />
+          <Skeleton class="h-4 w-full" />
+        </div>
+        <div v-else-if="reportError" class="text-sm text-destructive">{{ reportError }}</div>
+        <div v-else-if="reportData">
+          <div
+            class="prose prose-sm max-w-none dark:prose-invert"
+            v-html="mdToHtml(reportData.report)"
+          />
+          <p class="mt-3 text-[10px] text-muted-foreground">
+            模型：{{ reportData.model }} · 生成时间：{{ reportData.generated_at?.substring(0, 16).replace('T', ' ') }}
+          </p>
+        </div>
+        <div v-else class="flex flex-col items-center gap-2 py-6 text-center">
+          <FileText class="h-8 w-8 text-muted-foreground/40" />
+          <p class="text-xs text-muted-foreground">点击"生成研报"，AI 将基于财务数据、技术指标和价格预测生成分析报告</p>
         </div>
       </CardContent>
     </Card>
