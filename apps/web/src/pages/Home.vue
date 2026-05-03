@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useQuery, useQueryClient } from "@tanstack/vue-query";
+import { useQuery } from "@tanstack/vue-query";
 import {
   ArrowRight,
   BarChart3,
@@ -7,8 +7,11 @@ import {
   Search,
   Star,
   TrendingUp,
+  TrendingDown,
+  Activity,
+  Flame,
 } from "lucide-vue-next";
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { RouterLink } from "vue-router";
 import Badge from "@/components/ui/Badge.vue";
 import Card from "@/components/ui/Card.vue";
@@ -17,10 +20,10 @@ import Button from "@/components/ui/Button.vue";
 import Skeleton from "@/components/ui/Skeleton.vue";
 import { apiGet, apiDelete } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth";
+import { colorByChange, formatNumber } from "@/lib/utils";
 import type { Stock } from "@yzinvest/shared";
 
 const auth = useAuthStore();
-const qc = useQueryClient();
 
 // 自选股
 const { data: favorites, isLoading: favLoading } = useQuery({
@@ -29,16 +32,53 @@ const { data: favorites, isLoading: favLoading } = useQuery({
   enabled: () => auth.isAuthenticated,
 });
 
-// 统计数据
-const { data: stats } = useQuery({
-  queryKey: ["stats"],
-  queryFn: () => apiGet<{ total_stocks: number; favorites: number }>("/stocks/stats"),
+// 主要指数
+const { data: indicesData } = useQuery({
+  queryKey: ["indices"],
+  queryFn: () =>
+    apiGet<{
+      items: Array<{
+        ts_code: string;
+        name: string;
+        current_index: number;
+        pct_chg: number;
+        price_change: number;
+      }>;
+    }>("/stocks/indices"),
+  staleTime: 1000 * 30,
 });
 
-async function removeFavorite(ts_code: string) {
-  await apiDelete(`/favorites/${ts_code}`);
-  qc.invalidateQueries({ queryKey: ["favorites"] });
-}
+// 涨跌排行（取前50，前端分组）
+const { data: leadersData } = useQuery({
+  queryKey: ["leaders"],
+  queryFn: () =>
+    apiGet<{
+      items: Array<{
+        ts_code: string;
+        symbol: string;
+        name: string;
+        current_price: number;
+        pct_chg: number;
+        volume: number;
+        amount: number;
+      }>;
+    }>("/stocks/list?page=1&pageSize=50"),
+  staleTime: 1000 * 30,
+});
+
+const gainers = computed(() =>
+  (leadersData.value?.items ?? [])
+    .filter((s) => s.pct_chg > 0)
+    .sort((a, b) => b.pct_chg - a.pct_chg)
+    .slice(0, 8)
+);
+
+const losers = computed(() =>
+  (leadersData.value?.items ?? [])
+    .filter((s) => s.pct_chg < 0)
+    .sort((a, b) => a.pct_chg - b.pct_chg)
+    .slice(0, 8)
+);
 
 // 当前时间
 const now = computed(() => {
@@ -74,9 +114,6 @@ const quickActions = [
           </div>
         </div>
         <div class="flex items-center gap-3">
-          <span v-if="stats" class="hidden text-xs text-muted-foreground sm:block">
-            股票库 {{ stats.total_stocks }} 只 · 自选 {{ stats.favorites }} 只
-          </span>
           <RouterLink to="/stocks">
             <Button size="sm" class="gap-1.5">
               <Search class="h-3 w-3" />
@@ -107,8 +144,121 @@ const quickActions = [
         </RouterLink>
       </div>
 
-      <!-- 自选股 -->
+      <!-- 主要指数 -->
       <section class="mb-4">
+        <div class="mb-2 flex items-center gap-2">
+          <h2 class="text-sm font-semibold">主要指数</h2>
+          <Activity class="h-3.5 w-3.5 text-muted-foreground" />
+        </div>
+        <div v-if="!indicesData" class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <Skeleton v-for="i in 4" :key="i" class="h-16" />
+        </div>
+        <div v-else class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <Card
+            v-for="idx in indicesData.items"
+            :key="idx.ts_code"
+            class="overflow-hidden"
+          >
+            <CardContent class="p-2.5">
+              <div class="flex items-center justify-between">
+                <span class="text-xs text-muted-foreground">{{ idx.name }}</span>
+                <component
+                  :is="idx.pct_chg >= 0 ? TrendingUp : TrendingDown"
+                  class="h-3 w-3"
+                  :class="idx.pct_chg >= 0 ? 'text-up' : 'text-down'"
+                />
+              </div>
+              <div class="mt-1 font-mono text-base font-bold" :class="colorByChange(idx.pct_chg)">
+                {{ formatNumber(idx.current_index) }}
+              </div>
+              <div class="text-[10px] font-mono" :class="colorByChange(idx.pct_chg)">
+                {{ idx.pct_chg >= 0 ? '+' : '' }}{{ formatNumber(idx.pct_chg) }}%
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
+      <!-- 涨跌排行 -->
+      <section class="mb-4">
+        <div class="mb-2 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <h2 class="text-sm font-semibold">涨跌排行</h2>
+            <Flame class="h-3.5 w-3.5 text-muted-foreground" />
+          </div>
+          <RouterLink to="/stocks" class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+            查看行情 <ArrowRight class="h-3 w-3" />
+          </RouterLink>
+        </div>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <!-- 涨幅榜 -->
+          <Card>
+            <CardContent class="p-0">
+              <div class="border-b border-border px-3 py-2 text-xs font-medium text-up">涨幅榜</div>
+              <div v-if="!leadersData" class="space-y-2 p-3">
+                <Skeleton v-for="i in 5" :key="i" class="h-6" />
+              </div>
+              <div v-else-if="gainers.length === 0" class="px-3 py-4 text-center text-xs text-muted-foreground">
+                暂无数据
+              </div>
+              <div v-else>
+                <div
+                  v-for="(s, i) in gainers"
+                  :key="s.ts_code"
+                  class="flex items-center justify-between border-b border-border/50 px-3 py-2 last:border-0"
+                >
+                  <div class="flex items-center gap-2">
+                    <span class="w-4 text-center text-[10px] text-muted-foreground">{{ i + 1 }}</span>
+                    <RouterLink :to="`/stocks/${s.ts_code}`" class="text-xs font-medium hover:underline">
+                      {{ s.name }}
+                    </RouterLink>
+                    <span class="text-[10px] font-mono text-muted-foreground">{{ s.symbol }}</span>
+                  </div>
+                  <div class="text-right">
+                    <div class="text-xs font-mono font-medium text-up">+{{ formatNumber(s.pct_chg) }}%</div>
+                    <div class="text-[10px] font-mono text-muted-foreground">{{ formatNumber(s.current_price) }}</div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <!-- 跌幅榜 -->
+          <Card>
+            <CardContent class="p-0">
+              <div class="border-b border-border px-3 py-2 text-xs font-medium text-down">跌幅榜</div>
+              <div v-if="!leadersData" class="space-y-2 p-3">
+                <Skeleton v-for="i in 5" :key="i" class="h-6" />
+              </div>
+              <div v-else-if="losers.length === 0" class="px-3 py-4 text-center text-xs text-muted-foreground">
+                暂无数据
+              </div>
+              <div v-else>
+                <div
+                  v-for="(s, i) in losers"
+                  :key="s.ts_code"
+                  class="flex items-center justify-between border-b border-border/50 px-3 py-2 last:border-0"
+                >
+                  <div class="flex items-center gap-2">
+                    <span class="w-4 text-center text-[10px] text-muted-foreground">{{ i + 1 }}</span>
+                    <RouterLink :to="`/stocks/${s.ts_code}`" class="text-xs font-medium hover:underline">
+                      {{ s.name }}
+                    </RouterLink>
+                    <span class="text-[10px] font-mono text-muted-foreground">{{ s.symbol }}</span>
+                  </div>
+                  <div class="text-right">
+                    <div class="text-xs font-mono font-medium text-down">{{ formatNumber(s.pct_chg) }}%</div>
+                    <div class="text-[10px] font-mono text-muted-foreground">{{ formatNumber(s.current_price) }}</div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
+      <!-- 自选股 -->
+      <section>
         <div class="mb-2 flex items-center justify-between">
           <div class="flex items-center gap-2">
             <h2 class="text-sm font-semibold">我的自选</h2>
@@ -192,35 +342,13 @@ const quickActions = [
               <button
                 class="ml-1 shrink-0 rounded p-1 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive/10"
                 title="取消收藏"
-                @click.stop="removeFavorite(f.ts_code)"
+                @click.stop="apiDelete(`/favorites/${f.ts_code}`)"
               >
                 <Star class="h-3 w-3 fill-accent text-accent" />
               </button>
             </CardContent>
           </Card>
         </div>
-      </section>
-
-      <!-- 市场概览 -->
-      <section>
-        <div class="mb-2 flex items-center justify-between">
-          <h2 class="text-sm font-semibold">市场概览</h2>
-          <RouterLink
-            to="/stocks"
-            class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-          >
-            查看行情 <ArrowRight class="h-3 w-3" />
-          </RouterLink>
-        </div>
-        <Card class="border-dashed">
-          <CardContent class="flex flex-col items-center gap-2 py-6 text-center">
-            <TrendingUp class="h-6 w-6 text-muted-foreground/50" />
-            <div>
-              <p class="text-xs font-medium text-muted-foreground">行情数据同步中</p>
-              <p class="text-[10px] text-muted-foreground/70">请稍后刷新页面获取最新数据</p>
-            </div>
-          </CardContent>
-        </Card>
       </section>
     </main>
   </div>
